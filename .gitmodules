@@ -1,0 +1,4 @@
+[submodule ".claude"]
+	path = .claude
+	url = https://github.com/potentialInc/claude-workflow.git
+	branch = dev
