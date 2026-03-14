@@ -115,6 +115,7 @@ Categories are imported from WooCommerce and used as read-only filters. No local
 | PATCH | `/api/orders/:id/status` | Update order status. CANCELLED: stock restore + courier cancel. RETURNED: stock restore | Yes |
 | GET | `/api/orders/:id/invoice` | Get invoice print data for thermal receipt (3x4 inch) | Yes |
 | GET | `/api/orders/:id/qr` | Get QR code image (data URL) | Yes |
+| POST | `/api/orders/:id/retry-courier` | Retry Steadfast courier push for orders where initial push failed (`courierConsignmentId` is null) | Yes |
 
 #### GET /api/orders -- Query Parameters
 
@@ -164,6 +165,22 @@ Same fields as POST. Only allowed when order status is PENDING or CONFIRMED. Whe
 **Status change side effects:**
 - **CANCELLED:** Stock for all items is restored + synced to WC. If order has a Steadfast `consignment_id`, courier consignment is cancelled via API. Stock restorations logged with reason "Order Cancelled".
 - **RETURNED:** Stock for all items is restored + synced to WC. Courier consignment is NOT cancelled. Stock restorations logged with reason "Order Returned".
+
+#### POST /api/orders/:id/retry-courier
+
+Retries the Steadfast courier push for an order where the initial push failed (`courierConsignmentId` is null). On success, updates the order with the new `consignment_id` and `tracking_code`.
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "invoiceId": "GL-0042",
+  "courierConsignmentId": "SF-12345",
+  "courierTrackingCode": "227241927"
+}
+```
+
+**Error (400):** Returns error if the order already has a valid consignment ID.
 
 ---
 
@@ -230,6 +247,20 @@ No self-registration. Only admins can create and manage user accounts.
 | `cancelled` | CANCELLED |
 | `refunded` | RETURNED |
 | `failed` | CANCELLED |
+
+**WC Order Shipping Zone Parsing:** When an order arrives via WC webhook, the shipping zone is determined from the WC order's `shipping_lines` data (not parsed from address text). The system reads the WC-assigned shipping cost directly from the payload. If no shipping data is available, defaults to "Outside Dhaka" (150 BDT).
+
+**Category Sync:** Categories do not have a dedicated webhook endpoint. Categories are synced as part of product import and product sync operations — they are extracted from product data during `POST /api/woocommerce/import/products` and `POST /api/woocommerce/sync/products`.
+
+---
+
+### Settings
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/settings/wc-status` | Check WooCommerce connection status (tests API credentials from environment variables) | Yes (Admin) |
+
+**Note:** WooCommerce API credentials (`WC_URL`, `WC_CONSUMER_KEY`, `WC_CONSUMER_SECRET`, `WC_WEBHOOK_SECRET`) are configured via environment variables only and are not editable through the API. The Settings page displays connection status and user management.
 
 ---
 

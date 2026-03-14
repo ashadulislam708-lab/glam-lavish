@@ -18,8 +18,7 @@ Glam Lavish is an inventory management system for an e-commerce business, workin
 ```
 glam-lavish/
 ├── backend/           # NestJS API (port 8040)
-├── frontend/          # React Web - public tracking + login (port 8041)
-├── dashboard/         # React Admin Dashboard - staff/admin (port 8042)
+├── dashboard/         # React Admin Panel — all pages incl. public tracking (port 8041)
 ├── .claude/           # Claude configuration & skills
 ├── .claude-project/   # Project documentation
 └── docker-compose.yml # Service orchestration
@@ -54,6 +53,14 @@ glam-lavish/
 | No automated courier status polling | Staff manually updates order status. Reduces API calls and complexity | 2026-03-15 |
 | Soft delete on products | WC product.deleted webhook sets deletedAt. Preserves order history references | 2026-03-15 |
 | Dynamic variation attributes (JSONB) | Stores all WC attributes regardless of what the store defines | 2026-03-15 |
+| WC credentials are env-only | WC API keys configured via environment variables, not stored in DB. Settings page shows connection status only — more secure, simpler | 2026-03-15 |
+| Categories sync via product import | No dedicated category webhook. Categories extracted during product import/sync operations | 2026-03-15 |
+
+## Background Jobs
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| Stock Reconciliation | Every hour | Compares local stock vs WooCommerce stock for all products. If mismatch detected, local stock wins — pushed to WC. Discrepancies logged in `SyncLog` for admin review. Prevents silent stock drift from network failures or missed webhooks |
 
 ## Development Setup
 
@@ -67,8 +74,7 @@ docker-compose up -d
 
 # Or run locally
 cd backend && npm install && npm run start:dev
-cd frontend && npm install && npm run dev   # port 8041
-cd dashboard && npm install && npm run dev  # port 8042
+cd dashboard && npm install && npm run dev  # port 8041
 ```
 
 ## Environment Variables
@@ -91,7 +97,7 @@ cd dashboard && npm install && npm run dev  # port 8042
 | `STEADFAST_API_KEY` | Steadfast courier API key | Yes | - | `your-api-key` |
 | `STEADFAST_SECRET_KEY` | Steadfast courier secret key | Yes | - | `your-secret-key` |
 
-### Frontend / Dashboard (.env)
+### Dashboard (.env)
 
 | Variable | Description | Required | Default | Example |
 |----------|-------------|----------|---------|---------|

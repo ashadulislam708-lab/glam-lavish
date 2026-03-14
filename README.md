@@ -22,8 +22,7 @@
 ```
 glam-lavish/
 ├── backend/              # NestJS API server
-├── frontend/             # React web application (login + public tracking)
-├── dashboard/            # Admin dashboard (staff/admin operations)
+├── dashboard/            # React Admin Panel (login, admin operations, public tracking)
 ├── .claude/              # Claude configuration & skills
 ├── .claude-project/      # Project documentation
 └── docker-compose.yml    # Service orchestration
@@ -52,8 +51,7 @@ docker-compose ps
 ### Service URLs
 
 - **Backend API**: http://localhost:8040
-- **Frontend**: http://localhost:8041
-- **Dashboard**: http://localhost:8042
+- **Dashboard**: http://localhost:8041
 
 ## Development
 
@@ -63,14 +61,6 @@ docker-compose ps
 cd backend
 npm install
 npm run start:dev
-```
-
-### Frontend Development
-
-```bash
-cd frontend
-npm install
-npm run dev
 ```
 
 ### Dashboard Development
@@ -110,10 +100,10 @@ backend/
 ```
 
 ```
-frontend/
-├── src/
+dashboard/
+├── app/
 │   ├── components/      # Reusable components
-│   ├── pages/           # Page components
+│   ├── routes/          # Page routes
 │   ├── services/        # API services
 │   └── types/           # TypeScript types
 └── public/              # Static assets
@@ -126,11 +116,6 @@ cd backend
 npm run test              # Unit tests
 npm run test:e2e          # E2E tests
 npm run test:cov          # Coverage report
-```
-
-```bash
-cd frontend
-npm run test             # Vitest tests
 ```
 
 ## Deployment

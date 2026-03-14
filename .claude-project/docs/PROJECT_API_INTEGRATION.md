@@ -2,13 +2,12 @@
 
 ## Overview
 
-The application has two frontend projects:
-- **frontend/** (port 8041) — Public-facing pages: login and order tracking
-- **dashboard/** (port 8042) — Protected admin/staff pages: dashboard, products, orders, settings
+The application has a single frontend project:
+- **dashboard/** (port 8041) — Admin panel with all protected pages + public tracking page
 
-Both connect to the backend API at `http://localhost:8040/api`.
+Connects to the backend API at `http://localhost:8040/api`.
 
-## Frontend Pages (frontend/ — port 8041)
+## Dashboard Pages (dashboard/ — port 8041)
 
 ### Public Pages
 
@@ -16,8 +15,6 @@ Both connect to the backend API at `http://localhost:8040/api`.
 |-------|------|---------------|--------|
 | `/login` | Login | `POST /api/auth/login` | Not Started |
 | `/tracking/:invoiceId` | Order Tracking | `GET /api/tracking/:invoiceId` | Not Started |
-
-## Dashboard Pages (dashboard/ — port 8042)
 
 ### Protected Pages (Require Auth)
 
@@ -28,28 +25,25 @@ Both connect to the backend API at `http://localhost:8040/api`.
 | `/products/:id` | Product Detail | All | `GET /api/products/:id`, `PATCH /api/products/:id/stock`, `PATCH /api/products/variations/:id/stock`, `GET /api/products/:id/stock-history` | Not Started |
 | `/orders` | Order List | All | `GET /api/orders?page=&limit=&status=&source=&startDate=&endDate=`, `GET /api/orders/export` | Not Started |
 | `/orders/new` | Create Order | All | `POST /api/orders`, `GET /api/products?search=`, `GET /api/categories` | Not Started |
-| `/orders/:id` | Order Detail | All | `GET /api/orders/:id`, `PATCH /api/orders/:id`, `PATCH /api/orders/:id/status`, `GET /api/orders/:id/qr` | Not Started |
+| `/orders/:id` | Order Detail | All | `GET /api/orders/:id`, `PATCH /api/orders/:id`, `PATCH /api/orders/:id/status`, `POST /api/orders/:id/retry-courier`, `GET /api/orders/:id/qr` | Not Started |
 | `/orders/:id/invoice` | Invoice Print | All | `GET /api/orders/:id/invoice` | Not Started |
-| `/settings` | Settings | Admin | `GET /api/users`, `POST /api/users`, `PATCH /api/users/:id`, `DELETE /api/users/:id`, `POST /api/woocommerce/import/products`, `POST /api/woocommerce/sync/products`, `POST /api/woocommerce/sync/orders`, `GET /api/woocommerce/sync-logs` | Not Started |
+| `/settings` | Settings | Admin | `GET /api/users`, `POST /api/users`, `PATCH /api/users/:id`, `DELETE /api/users/:id`, `GET /api/settings/wc-status`, `POST /api/woocommerce/import/products`, `POST /api/woocommerce/sync/products`, `POST /api/woocommerce/sync/orders`, `GET /api/woocommerce/sync-logs` | Not Started |
 
 ### Auth Integration
 
 | Endpoint | Used By | Notes |
 |----------|---------|-------|
-| `POST /api/auth/login` | Login page (frontend/) | Returns access + refresh tokens |
-| `POST /api/auth/refresh` | Axios interceptor (both apps) | Silent token refresh on 401 |
+| `POST /api/auth/login` | Login page | Returns access + refresh tokens |
+| `POST /api/auth/refresh` | Axios interceptor | Silent token refresh on 401 |
 | `POST /api/auth/logout` | Dashboard header | Revokes refresh token |
-| `GET /api/auth/me` | App initialization (dashboard/) | Load user profile on mount |
+| `GET /api/auth/me` | App initialization | Load user profile on mount |
 
 ## Routing Strategy
 
-### frontend/ (port 8041)
-- Public routes only — no auth guard needed
-- `/login` redirects to dashboard (port 8042) on successful auth
+### dashboard/ (port 8041)
+- All routes protected by auth guard except `/login` and `/tracking/:invoiceId`
+- `/login` redirects to `/` on successful auth
 - `/tracking/:invoiceId` is fully public, no header/nav needed
-
-### dashboard/ (port 8042)
-- All routes protected by auth guard (redirect to login on 401)
 - Role-based visibility:
   - `/settings` — Admin only (hidden from Staff)
   - All other pages — both Admin and Staff
@@ -57,8 +51,6 @@ Both connect to the backend API at `http://localhost:8040/api`.
 - Auto-refresh JWT tokens via Axios interceptor
 
 ## API Client Configuration
-
-Both frontend projects should configure an Axios instance:
 
 ```typescript
 // services/api.ts

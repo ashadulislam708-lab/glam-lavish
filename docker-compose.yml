@@ -36,22 +36,6 @@ services:
     networks:
       - glam-lavish-network
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: glam-lavish-frontend
-    restart: unless-stopped
-    ports:
-      - '8041:8041'
-    environment:
-      - VITE_API_URL=http://localhost:8040/api
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    networks:
-      - glam-lavish-network
-
   dashboard:
     build:
       context: ./dashboard
@@ -59,7 +43,7 @@ services:
     container_name: glam-lavish-dashboard
     restart: unless-stopped
     ports:
-      - '8042:8042'
+      - '8041:8041'
     environment:
       - VITE_API_URL=http://localhost:8040/api
     volumes:

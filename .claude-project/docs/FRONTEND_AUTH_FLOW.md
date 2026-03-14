@@ -4,7 +4,7 @@
 
 ### Step 1: Login Page
 
-- **Route**: `/login` (in frontend/ app, port 8041)
+- **Route**: `/login` (in dashboard/ app, port 8041)
 - **Form fields**: email (text, required), password (password, required)
 - **UI**: Simple centered login form with Glam Lavish branding
 - **Links/actions**: No forgot password, no sign up (admin creates all accounts)
@@ -15,7 +15,7 @@
 
 - **If Success**:
   1. Store access token and refresh token (localStorage)
-  2. Redirect to dashboard app (port 8042) at `/`
+  2. Redirect to `/` (dashboard home)
 
 - **If Not Success**:
   1. Stay on Login Page
@@ -23,7 +23,7 @@
 
 ## Sign Up Flow
 
-**No sign-up flow.** All user accounts are created by Admin via Settings page in the dashboard. No self-registration is supported.
+**No sign-up flow.** All user accounts are created by Admin via Settings page. No self-registration is supported.
 
 ## Forgot Password Flow
 
@@ -55,10 +55,10 @@
 
 ### Route Guards
 
-**dashboard/ app (port 8042):**
-- All routes require authentication
+**dashboard/ app (port 8041):**
+- All routes require authentication except `/login` and `/tracking/:invoiceId`
 - On mount: call `GET /api/auth/me` to verify token and load user profile
-- If token invalid/expired and refresh fails → redirect to login (frontend/ port 8041)
+- If token invalid/expired and refresh fails → redirect to `/login`
 
 **Role-based access:**
 | Route | Admin | Staff |
@@ -72,14 +72,13 @@
 | `/orders/:id/invoice` | Yes | Yes |
 | `/settings` | Yes | **No** (hidden) |
 
-**frontend/ app (port 8041):**
-- `/login` — public, redirects to dashboard if already authenticated
+**Public routes (no auth):**
+- `/login` — redirects to `/` if already authenticated
 - `/tracking/:invoiceId` — fully public, no auth check needed
 
 ## Security Notes
 
 - JWT access tokens sent via `Authorization: Bearer <token>` header
-- No httpOnly cookies used (separate frontend/backend origins)
 - Passwords hashed with bcrypt (10 salt rounds) server-side
 - No self-registration prevents unauthorized account creation
 - Refresh tokens are revoked on logout and can be revoked by admin
