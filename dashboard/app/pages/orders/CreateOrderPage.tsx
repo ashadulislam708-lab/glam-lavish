@@ -40,6 +40,7 @@ import {
 import {
   ArrowLeft,
   Loader2,
+  Minus,
   Plus,
   Trash2,
   Search,
@@ -486,19 +487,51 @@ export default function CreateOrderPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number"
-                              min={1}
-                              max={item.maxStock}
-                              value={item.quantity}
-                              onChange={(e) =>
-                                handleQuantityChange(
-                                  index,
-                                  parseInt(e.target.value) || 1
-                                )
-                              }
-                              className="w-20"
-                            />
+                            <div className="flex items-center gap-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() =>
+                                  handleQuantityChange(
+                                    index,
+                                    item.quantity - 1
+                                  )
+                                }
+                                disabled={item.quantity <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={item.maxStock}
+                                value={item.quantity}
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val)) {
+                                    handleQuantityChange(index, val);
+                                  }
+                                }}
+                                className="w-14 text-center"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() =>
+                                  handleQuantityChange(
+                                    index,
+                                    item.quantity + 1
+                                  )
+                                }
+                                disabled={item.quantity >= item.maxStock}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell className="font-medium">
                             {formatBDT(item.unitPrice * item.quantity)}
