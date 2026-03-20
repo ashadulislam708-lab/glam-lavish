@@ -134,7 +134,7 @@ export default function InvoicePrintPage() {
               }}
             />
             <div style={{ fontSize: "8px", marginTop: "2px", color: "#000" }}>
-              www.glamlavish.com | 8809678-770181
+              www.glamlavish.com | 09678-770181
             </div>
           </div>
 
@@ -146,23 +146,19 @@ export default function InvoicePrintPage() {
               marginBottom: "6px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span><strong>Invoice No:</strong></span>
-              <span>{invoice.invoiceId}</span>
+            <div>
+              <span style={{ fontWeight: "normal" }}>Invoice No:</span> {invoice.invoiceId}
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span><strong>Invoice Date:</strong></span>
-              <span>{formatDate(invoice.date)}</span>
+            <div>
+              <span style={{ fontWeight: "normal" }}>Invoice Date:</span> {formatDate(invoice.date)}
             </div>
             {invoice.courierName && (
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span><strong>Courier:</strong></span>
-                <span>{invoice.courierName}</span>
+              <div>
+                <span style={{ fontWeight: "normal" }}>Courier:</span> {invoice.courierName}
               </div>
             )}
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span><strong>Delivery ID:</strong></span>
-              <span>{invoice.deliveryId || "-"}</span>
+            <div>
+              <span style={{ fontWeight: "normal" }}>Delivery ID:</span> {invoice.deliveryId || "-"}
             </div>
           </div>
 
@@ -173,17 +169,17 @@ export default function InvoicePrintPage() {
               marginBottom: "6px",
             }}
           >
-            <div style={{ fontWeight: "bold", marginBottom: "2px", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <div style={{ fontWeight: "normal", marginBottom: "2px", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
               Invoice To
             </div>
             <div>
-              <strong>Name:</strong> {invoice.customerName}
+              <span style={{ fontWeight: "normal" }}>Name:</span> {invoice.customerName}
             </div>
             <div>
-              <strong>Phone:</strong> {invoice.customerPhone}
+              <span style={{ fontWeight: "normal" }}>Phone:</span> {invoice.customerPhone}
             </div>
             <div style={{ fontSize: "10px" }}>
-              <strong>Address:</strong> {invoice.customerAddress}
+              <span style={{ fontWeight: "normal" }}>Address:</span> {invoice.customerAddress}
             </div>
           </div>
 
@@ -204,11 +200,11 @@ export default function InvoicePrintPage() {
             >
               <thead>
                 <tr style={{ borderBottom: "1px solid #000" }}>
-                  <th style={{ textAlign: "left", paddingBottom: "2px", width: "35%" }}>Product</th>
-                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "18%" }}>Color/Size</th>
-                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "12%" }}>Qty</th>
-                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "15%" }}>Price</th>
-                  <th style={{ textAlign: "right", paddingBottom: "2px", width: "20%" }}>Item Total</th>
+                  <th style={{ textAlign: "left", paddingBottom: "2px", paddingTop: "2px", width: "35%", fontWeight: "normal" }}>Product</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", paddingTop: "2px", width: "18%", fontWeight: "normal" }}>Color/Size</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", paddingTop: "2px", width: "12%", fontWeight: "normal" }}>Qty</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", paddingTop: "2px", width: "15%", fontWeight: "normal" }}>Price</th>
+                  <th style={{ textAlign: "right", paddingBottom: "2px", paddingTop: "2px", width: "20%", fontWeight: "normal" }}>Item Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -217,7 +213,7 @@ export default function InvoicePrintPage() {
                     <td
                       style={{
                         textAlign: "left",
-                        paddingTop: "2px",
+                        padding: "2px 0",
                         maxWidth: "100px",
                         wordBreak: "break-word",
                       }}
@@ -227,7 +223,7 @@ export default function InvoicePrintPage() {
                     <td
                       style={{
                         textAlign: "center",
-                        paddingTop: "2px",
+                        padding: "2px 0",
                         maxWidth: "55px",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -236,13 +232,13 @@ export default function InvoicePrintPage() {
                     >
                       {item.variation || "-"}
                     </td>
-                    <td style={{ textAlign: "center", paddingTop: "2px" }}>
+                    <td style={{ textAlign: "center", padding: "2px 0" }}>
                       {item.quantity}
                     </td>
-                    <td style={{ textAlign: "center", paddingTop: "2px" }}>
+                    <td style={{ textAlign: "center", padding: "2px 0" }}>
                       {item.price}
                     </td>
-                    <td style={{ textAlign: "right", paddingTop: "2px" }}>
+                    <td style={{ textAlign: "right", padding: "2px 0" }}>
                       {item.price * item.quantity}
                     </td>
                   </tr>
@@ -260,23 +256,26 @@ export default function InvoicePrintPage() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Discount:</span>
+              <span>0 TK</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Sub Total:</span>
-              <span>BDT {invoice.subtotal}</span>
+              <span>{invoice.subtotal} TK</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Delivery Charge:</span>
-              <span>BDT {invoice.shippingFee}</span>
+              <span>{invoice.shippingFee} TK</span>
             </div>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                fontWeight: "bold",
                 marginTop: "2px",
               }}
             >
               <span>Grand Total:</span>
-              <span>BDT {invoice.grandTotal}</span>
+              <span>{invoice.grandTotal} TK</span>
             </div>
             <div
               style={{
@@ -285,17 +284,16 @@ export default function InvoicePrintPage() {
               }}
             >
               <span>Advance Payment:</span>
-              <span>BDT 0</span>
+              <span>0 TK</span>
             </div>
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                fontWeight: "bold",
               }}
             >
               <span>Due Amount:</span>
-              <span>BDT {invoice.dueAmount}</span>
+              <span>{invoice.dueAmount} TK</span>
             </div>
           </div>
 
