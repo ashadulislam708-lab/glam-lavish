@@ -13,7 +13,7 @@ export default function InvoicePrintPage() {
   const { id } = useParams<{ id: string }>();
   const [invoice, setInvoice] = useState<InvoiceData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showQrCode, setShowQrCode] = useState(true);
+  const [showQrCode, setShowQrCode] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -127,19 +127,21 @@ export default function InvoicePrintPage() {
               src="/logo.png"
               alt="Glam Lavish"
               style={{
-                maxWidth: "2.2in",
+                maxWidth: "1.6in",
                 height: "auto",
                 display: "block",
                 margin: "0 auto",
               }}
             />
+            <div style={{ fontSize: "8px", marginTop: "2px", color: "#000" }}>
+              www.glamlavish.com | 8809678-770181
+            </div>
           </div>
 
           {/* Invoice Metadata */}
           <div
             style={{
-              borderTop: "1px dashed #000",
-              borderBottom: "1px dashed #000",
+              borderBottom: "1px dashed #ccc",
               padding: "4px 0",
               marginBottom: "6px",
             }}
@@ -167,7 +169,6 @@ export default function InvoicePrintPage() {
           {/* Invoice To */}
           <div
             style={{
-              borderBottom: "1px dashed #000",
               paddingBottom: "4px",
               marginBottom: "6px",
             }}
@@ -189,7 +190,7 @@ export default function InvoicePrintPage() {
           {/* Items Table */}
           <div
             style={{
-              borderBottom: "1px dashed #000",
+              borderTop: "1px solid #000",
               paddingBottom: "4px",
               marginBottom: "6px",
             }}
@@ -203,23 +204,22 @@ export default function InvoicePrintPage() {
             >
               <thead>
                 <tr style={{ borderBottom: "1px solid #000" }}>
-                  <th style={{ textAlign: "left", paddingBottom: "2px", width: "40%" }}>Product</th>
-                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "20%" }}>Color/Size</th>
-                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "15%" }}>Qty</th>
-                  <th style={{ textAlign: "right", paddingBottom: "2px", width: "25%" }}>Price</th>
+                  <th style={{ textAlign: "left", paddingBottom: "2px", width: "35%" }}>Product</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "18%" }}>Color/Size</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "12%" }}>Qty</th>
+                  <th style={{ textAlign: "center", paddingBottom: "2px", width: "15%" }}>Price</th>
+                  <th style={{ textAlign: "right", paddingBottom: "2px", width: "20%" }}>Item Total</th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.items.map((item, idx) => (
-                  <tr key={idx}>
+                  <tr key={idx} style={{ borderBottom: idx < invoice.items.length - 1 ? "1px dashed #ddd" : "none" }}>
                     <td
                       style={{
                         textAlign: "left",
                         paddingTop: "2px",
                         maxWidth: "100px",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        wordBreak: "break-word",
                       }}
                     >
                       {item.name}
@@ -239,6 +239,9 @@ export default function InvoicePrintPage() {
                     <td style={{ textAlign: "center", paddingTop: "2px" }}>
                       {item.quantity}
                     </td>
+                    <td style={{ textAlign: "center", paddingTop: "2px" }}>
+                      {item.price}
+                    </td>
                     <td style={{ textAlign: "right", paddingTop: "2px" }}>
                       {item.price * item.quantity}
                     </td>
@@ -251,7 +254,7 @@ export default function InvoicePrintPage() {
           {/* Totals */}
           <div
             style={{
-              borderBottom: "1px dashed #000",
+              borderBottom: showQrCode && invoice.qrCodeDataUrl ? "1px dashed #000" : "none",
               paddingBottom: "4px",
               marginBottom: "6px",
             }}
@@ -274,6 +277,15 @@ export default function InvoicePrintPage() {
             >
               <span>Grand Total:</span>
               <span>BDT {invoice.grandTotal}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <span>Advance Payment:</span>
+              <span>BDT 0</span>
             </div>
             <div
               style={{
@@ -306,7 +318,6 @@ export default function InvoicePrintPage() {
             style={{
               textAlign: "center",
               fontSize: "8px",
-              borderTop: "1px dashed #000",
               paddingTop: "4px",
             }}
           >
