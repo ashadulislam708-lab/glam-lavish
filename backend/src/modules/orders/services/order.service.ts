@@ -610,7 +610,9 @@ export class OrderService {
                                 recipient_name: order.customerName,
                                 recipient_phone: order.customerPhone,
                                 recipient_address: order.customerAddress,
-                                cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
+                                cod_amount:
+                                    Number(order.grandTotal) -
+                                    Number(order.advanceAmount),
                             });
 
                         if (courierResult) {
@@ -698,7 +700,8 @@ export class OrderService {
 
         // Recalculate grand total if zone, discount, or advance changed
         const needsRecalc =
-            (dto.shippingZone !== undefined && dto.shippingZone !== order.shippingZone) ||
+            (dto.shippingZone !== undefined &&
+                dto.shippingZone !== order.shippingZone) ||
             dto.discountAmount !== undefined ||
             dto.advanceAmount !== undefined;
 
@@ -706,14 +709,19 @@ export class OrderService {
             const newShippingFee = dto.shippingZone
                 ? SHIPPING_FEES[dto.shippingZone]
                 : Number(order.shippingFee);
-            const newDiscount = dto.discountAmount ?? Number(order.discountAmount);
+            const newDiscount =
+                dto.discountAmount ?? Number(order.discountAmount);
 
-            if (dto.shippingZone !== undefined && dto.shippingZone !== order.shippingZone) {
+            if (
+                dto.shippingZone !== undefined &&
+                dto.shippingZone !== order.shippingZone
+            ) {
                 updateData.shippingZone = dto.shippingZone;
                 updateData.shippingFee = newShippingFee;
             }
 
-            updateData.grandTotal = Number(order.subtotal) - newDiscount + newShippingFee;
+            updateData.grandTotal =
+                Number(order.subtotal) - newDiscount + newShippingFee;
         }
 
         await this.orderRepository.update(id, updateData);
@@ -723,18 +731,32 @@ export class OrderService {
             const oldDiscount = Number(order.discountAmount);
             const oldAdvance = Number(order.advanceAmount);
 
-            if (dto.discountAmount !== undefined && dto.discountAmount !== oldDiscount) {
-                const note = dto.discountAmount > 0
-                    ? `Discount amount updated to ${dto.discountAmount} BDT from Glam Lavish Inventory System`
-                    : `Discount amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(order.wcOrderId, note);
+            if (
+                dto.discountAmount !== undefined &&
+                dto.discountAmount !== oldDiscount
+            ) {
+                const note =
+                    dto.discountAmount > 0
+                        ? `Discount amount updated to ${dto.discountAmount} BDT from Glam Lavish Inventory System`
+                        : `Discount amount removed from Glam Lavish Inventory System`;
+                this.wooCommerceService.pushOrderNoteToWc(
+                    order.wcOrderId,
+                    note,
+                );
             }
 
-            if (dto.advanceAmount !== undefined && dto.advanceAmount !== oldAdvance) {
-                const note = dto.advanceAmount > 0
-                    ? `Advance amount updated to ${dto.advanceAmount} BDT from Glam Lavish Inventory System`
-                    : `Advance amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(order.wcOrderId, note);
+            if (
+                dto.advanceAmount !== undefined &&
+                dto.advanceAmount !== oldAdvance
+            ) {
+                const note =
+                    dto.advanceAmount > 0
+                        ? `Advance amount updated to ${dto.advanceAmount} BDT from Glam Lavish Inventory System`
+                        : `Advance amount removed from Glam Lavish Inventory System`;
+                this.wooCommerceService.pushOrderNoteToWc(
+                    order.wcOrderId,
+                    note,
+                );
             }
         }
 
@@ -1160,8 +1182,12 @@ export class OrderService {
                 .getRawMany(),
         ]);
 
-        const names = [...new Set(identities.map((r: { name: string }) => r.name))];
-        const addresses = [...new Set(identities.map((r: { address: string }) => r.address))];
+        const names = [
+            ...new Set(identities.map((r: { name: string }) => r.name)),
+        ];
+        const addresses = [
+            ...new Set(identities.map((r: { address: string }) => r.address)),
+        ];
 
         return {
             completed: parseInt(result?.completed, 10) || 0,

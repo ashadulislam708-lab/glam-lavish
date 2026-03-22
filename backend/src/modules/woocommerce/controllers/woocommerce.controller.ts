@@ -148,9 +148,7 @@ export class WooCommerceController {
     @Roles(UserRoleEnum.ADMIN)
     @Post('sync/orders/:wcOrderId')
     @HttpCode(HttpStatus.OK)
-    async syncSingleOrder(
-        @Param('wcOrderId', ParseIntPipe) wcOrderId: number,
-    ) {
+    async syncSingleOrder(@Param('wcOrderId', ParseIntPipe) wcOrderId: number) {
         return this.wooCommerceService.syncSingleOrder(wcOrderId);
     }
 

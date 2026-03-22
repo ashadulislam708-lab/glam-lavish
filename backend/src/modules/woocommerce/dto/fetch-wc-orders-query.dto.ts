@@ -18,12 +18,17 @@ export class FetchWcOrdersQueryDto {
     @Max(100)
     perPage?: number = 20;
 
-    @ApiPropertyOptional({ description: 'Filter by WC order status (e.g. processing, pending, completed)' })
+    @ApiPropertyOptional({
+        description:
+            'Filter by WC order status (e.g. processing, pending, completed)',
+    })
     @IsOptional()
     @IsString()
     status?: string;
 
-    @ApiPropertyOptional({ description: 'Filter orders after this ISO date (default: 30 days ago)' })
+    @ApiPropertyOptional({
+        description: 'Filter orders after this ISO date (default: 30 days ago)',
+    })
     @IsOptional()
     @IsString()
     dateAfter?: string;

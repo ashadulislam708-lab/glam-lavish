@@ -252,7 +252,8 @@ export class WooCommerceService {
                             [OrderStatusEnum.FAILED]: 'Order Failed',
                             [OrderStatusEnum.DRAFT]: 'Order Reverted to Draft',
                         };
-                        const reasonText = reasonMap[newStatus] || 'Order Status Changed';
+                        const reasonText =
+                            reasonMap[newStatus] || 'Order Status Changed';
 
                         await this.dataSource.transaction(async (manager) => {
                             await restoreOrderItemsStock(
@@ -592,9 +593,7 @@ export class WooCommerceService {
                 customer_note: false,
             });
 
-            this.logger.log(
-                `Added note to WC order ${wcOrderId}: ${note}`,
-            );
+            this.logger.log(`Added note to WC order ${wcOrderId}: ${note}`);
         } catch (err: any) {
             this.logger.error(
                 `Failed to add note to WC order ${wcOrderId}: ${err.message}`,
@@ -1128,7 +1127,8 @@ export class WooCommerceService {
 
                 // Map WC status
                 const status =
-                    WC_STATUS_MAP[wcOrder.status] || OrderStatusEnum.PENDING_PAYMENT;
+                    WC_STATUS_MAP[wcOrder.status] ||
+                    OrderStatusEnum.PENDING_PAYMENT;
 
                 // Parse shipping info
                 const shippingZone = ShippingZoneEnum.OUTSIDE_DHAKA; // Default
