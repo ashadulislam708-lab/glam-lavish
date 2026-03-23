@@ -7,7 +7,7 @@ import {
     Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, SelectQueryBuilder, In } from 'typeorm';
+import { Repository, DataSource, SelectQueryBuilder } from 'typeorm';
 import { Product } from '../entities/product.entity.js';
 import { ProductVariation } from '../entities/product-variation.entity.js';
 import { StockAdjustmentLog } from '../entities/stock-adjustment-log.entity.js';

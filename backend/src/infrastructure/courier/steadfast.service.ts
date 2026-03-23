@@ -116,14 +116,12 @@ export class SteadfastService {
      */
     async createBulkOrder(
         requests: SteadfastCreateOrderRequest[],
-    ): Promise<
-        Array<{
-            invoice: string;
-            consignment_id: number | string | null;
-            tracking_code: string | null;
-            status: string;
-        }> | null
-    > {
+    ): Promise<Array<{
+        invoice: string;
+        consignment_id: number | string | null;
+        tracking_code: string | null;
+        status: string;
+    }> | null> {
         const config = envConfigService.getSteadfastConfig();
 
         if (!config.STEADFAST_API_KEY || !config.STEADFAST_SECRET_KEY) {
@@ -163,7 +161,9 @@ export class SteadfastService {
             }
         }
 
-        const successCount = results.filter((r) => r.status === 'success').length;
+        const successCount = results.filter(
+            (r) => r.status === 'success',
+        ).length;
         this.logger.log(
             `Steadfast bulk result: ${successCount}/${results.length} successful`,
         );

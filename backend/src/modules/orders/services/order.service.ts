@@ -95,7 +95,10 @@ export class OrderService {
         }
 
         if (dto.ids) {
-            const idList = dto.ids.split(',').map((id) => id.trim()).filter(Boolean);
+            const idList = dto.ids
+                .split(',')
+                .map((id) => id.trim())
+                .filter(Boolean);
             if (idList.length > 0) {
                 qb.andWhere('order.id IN (:...idList)', { idList });
             }
@@ -378,7 +381,7 @@ export class OrderService {
                     stockDecrementedProducts,
                 };
             })
-            .then(async ({ order, stockDecrementedProducts: decremented }) => {
+            .then(({ order, stockDecrementedProducts: decremented }) => {
                 // Push updated stock to WooCommerce (non-blocking)
                 for (const item of decremented) {
                     this.wooCommerceService
@@ -683,7 +686,7 @@ export class OrderService {
             OrderStatusEnum.REFUNDED,
             OrderStatusEnum.FAILED,
         ];
-        if (terminalStatuses.includes(order.status as OrderStatusEnum)) {
+        if (terminalStatuses.includes(order.status)) {
             throw new BadRequestException(
                 `Order cannot be edited in ${order.status} status`,
             );
@@ -749,7 +752,7 @@ export class OrderService {
                     dto.discountAmount > 0
                         ? `Discount amount updated to ${dto.discountAmount} BDT from Glam Lavish Inventory System`
                         : `Discount amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(
+                void this.wooCommerceService.pushOrderNoteToWc(
                     order.wcOrderId,
                     note,
                 );
@@ -763,7 +766,7 @@ export class OrderService {
                     dto.advanceAmount > 0
                         ? `Advance amount updated to ${dto.advanceAmount} BDT from Glam Lavish Inventory System`
                         : `Advance amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(
+                void this.wooCommerceService.pushOrderNoteToWc(
                     order.wcOrderId,
                     note,
                 );
@@ -921,9 +924,7 @@ export class OrderService {
             recipient_name: order.customerName,
             recipient_phone: order.customerPhone,
             recipient_address: order.customerAddress,
-            cod_amount:
-                Number(order.grandTotal) -
-                Number(order.advanceAmount),
+            cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
         });
 
         if (!courierResult) {
@@ -976,17 +977,13 @@ export class OrderService {
                     status: 'skipped',
                     error: 'Already pushed to courier',
                 });
-            } else if (
-                o.shippingPartner !== ShippingPartnerEnum.STEADFAST
-            ) {
+            } else if (o.shippingPartner !== ShippingPartnerEnum.STEADFAST) {
                 skippedResults.push({
                     invoiceId: o.invoiceId,
                     status: 'skipped',
                     error: 'Not a Steadfast order',
                 });
-            } else if (
-                terminalStatuses.includes(o.status as OrderStatusEnum)
-            ) {
+            } else if (terminalStatuses.includes(o.status)) {
                 skippedResults.push({
                     invoiceId: o.invoiceId,
                     status: 'skipped',
@@ -1025,8 +1022,7 @@ export class OrderService {
             recipient_name: order.customerName,
             recipient_phone: order.customerPhone,
             recipient_address: order.customerAddress,
-            cod_amount:
-                Number(order.grandTotal) - Number(order.advanceAmount),
+            cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
         }));
 
         const bulkResult =
@@ -1049,9 +1045,7 @@ export class OrderService {
         }
 
         // Build invoice-to-order map for matching results
-        const orderByInvoice = new Map(
-            eligible.map((o) => [o.invoiceId, o]),
-        );
+        const orderByInvoice = new Map(eligible.map((o) => [o.invoiceId, o]));
 
         let pushed = 0;
         let errors = 0;

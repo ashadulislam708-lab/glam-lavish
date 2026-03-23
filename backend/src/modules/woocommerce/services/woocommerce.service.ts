@@ -670,9 +670,7 @@ export class WooCommerceService {
 
             try {
                 // --- Inbound: Pull latest from WC ---
-                const response = await client.get(
-                    `/orders/${order.wcOrderId}`,
-                );
+                const response = await client.get(`/orders/${order.wcOrderId}`);
                 const wcOrder = response.data;
 
                 // Update status if changed
