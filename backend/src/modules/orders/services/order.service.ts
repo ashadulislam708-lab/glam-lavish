@@ -67,7 +67,24 @@ export class OrderService {
             .leftJoinAndSelect('order.items', 'items')
             .leftJoinAndSelect('order.createdBy', 'createdBy');
 
-        if (dto.status) {
+        // Trash mode: show only soft-deleted orders
+        if (dto.trashed) {
+            qb.withDeleted();
+            qb.andWhere('order.deletedAt IS NOT NULL');
+        }
+
+        // Multi-status filter takes priority over single status
+        if (dto.statuses) {
+            const statusList = dto.statuses
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (statusList.length > 0) {
+                qb.andWhere('order.status IN (:...statusList)', {
+                    statusList,
+                });
+            }
+        } else if (dto.status) {
             qb.andWhere('order.status = :status', { status: dto.status });
         }
 
@@ -161,6 +178,17 @@ export class OrderService {
         );
 
         return [headers.join(','), ...rows].join('\n');
+    }
+
+    /**
+     * Soft-delete (trash) an order
+     */
+    async trashOrder(id: string): Promise<void> {
+        const order = await this.orderRepository.findOne({ where: { id } });
+        if (!order) {
+            throw new NotFoundException(`Order with ID ${id} not found`);
+        }
+        await this.orderRepository.softRemove(order);
     }
 
     /**

@@ -1,5 +1,5 @@
-import { IsOptional, IsString, IsInt, Min, Max, IsEnum } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsString, IsInt, Min, Max, IsEnum, IsBoolean } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatusEnum } from '../../../shared/enums/order-status.enum.js';
 import { OrderSourceEnum } from '../../../shared/enums/order-source.enum.js';
@@ -63,4 +63,19 @@ export class ListOrdersDto {
     @IsOptional()
     @IsString()
     ids?: string;
+
+    @ApiPropertyOptional({
+        description: 'Filter by multiple order statuses (comma-separated)',
+    })
+    @IsOptional()
+    @IsString()
+    statuses?: string;
+
+    @ApiPropertyOptional({
+        description: 'Include only soft-deleted (trashed) orders',
+    })
+    @IsOptional()
+    @Transform(({ value }) => value === 'true' || value === true)
+    @IsBoolean()
+    trashed?: boolean;
 }

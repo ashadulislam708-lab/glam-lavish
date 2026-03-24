@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAppDispatch, useAppSelector } from "~/redux/store/hooks";
 import { fetchOrders } from "~/services/httpServices/orderService";
 import { orderService } from "~/services/httpServices/orderService";
@@ -30,13 +30,25 @@ import { formatBDT, formatDateTime } from "~/utils/formatting";
 import { getOrderStatusColor, getOrderSourceColor } from "~/utils/badges";
 import { OrderStatusEnum, OrderSourceEnum } from "~/enums";
 import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
-import { Plus, FileDown, Search, Loader2, Check, AlertCircle, RefreshCw, X, Printer, Truck } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Plus, FileDown, Search, Loader2, Check, AlertCircle, RefreshCw, X, Printer, Truck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { FormHandleState } from "~/types/common";
+import { ORDER_STATUS_GROUPS, type OrderStatusGroup } from "~/constants/orderStatusGroups";
 
 export default function OrderListPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const group = searchParams.get("group") as OrderStatusGroup | null;
+  const groupConfig = group && group in ORDER_STATUS_GROUPS ? ORDER_STATUS_GROUPS[group] : null;
   const { orders, loading, meta } = useAppSelector((state) => state.orders);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -65,27 +77,44 @@ export default function OrderListPage() {
   };
 
   const loadOrders = useCallback(() => {
+    let statusesFilter: string | undefined;
+    let trashedFilter: boolean | undefined;
+
+    if (group === "trash") {
+      trashedFilter = true;
+    } else if (groupConfig && groupConfig.statuses.length > 0) {
+      statusesFilter = groupConfig.statuses.join(",");
+    }
+
     dispatch(
       fetchOrders({
         page,
         limit: 25,
-        status: status || undefined,
+        status: !statusesFilter && !trashedFilter ? status || undefined : undefined,
+        statuses: statusesFilter,
+        trashed: trashedFilter,
         source: source || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         search: search || undefined,
       })
     );
-  }, [dispatch, page, status, source, startDate, endDate, search]);
+  }, [dispatch, page, status, source, startDate, endDate, search, group, groupConfig]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
 
-  // Clear selection when filters/page change
+  // Clear selection when filters/page/group change
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, status, source, startDate, endDate, search]);
+  }, [page, status, source, startDate, endDate, search, group]);
+
+  // Reset status filter when group changes
+  useEffect(() => {
+    setStatus("");
+    setPage(1);
+  }, [group]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -264,10 +293,29 @@ export default function OrderListPage() {
 
   const isBusy = formHandle.isLoading;
 
+  // Trash confirmation state
+  const [trashTarget, setTrashTarget] = useState<{ id: string; invoiceId: string } | null>(null);
+
+  const handleTrashOrder = useCallback(async () => {
+    if (!trashTarget) return;
+    try {
+      await orderService.trashOrder(trashTarget.id);
+      toast.success(`Order ${trashTarget.invoiceId} moved to trash`);
+      setTrashTarget(null);
+      loadOrders();
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "Failed to trash order"
+      );
+    }
+  }, [trashTarget, loadOrders]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Orders</h1>
+        <h1 className="text-xl font-bold">
+          Orders{groupConfig ? ` - ${groupConfig.label}` : ""}
+        </h1>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -289,9 +337,8 @@ export default function OrderListPage() {
       </div>
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between rounded-lg border bg-blue-50 px-4 py-3">
-          <span className="text-sm font-medium text-blue-900">
+        <div className={cn("flex items-center justify-between rounded-lg border px-4 py-3", selectedIds.size > 0 ? "bg-blue-50" : "bg-muted/30 opacity-60")}>
+          <span className={cn("text-sm font-medium", selectedIds.size > 0 ? "text-blue-900" : "text-muted-foreground")}>
             {selectedIds.size} order{selectedIds.size !== 1 ? "s" : ""} selected
           </span>
           <div className="flex items-center gap-2">
@@ -299,6 +346,7 @@ export default function OrderListPage() {
               size="sm"
               variant="outline"
               onClick={handleBulkPrintInvoice}
+              disabled={selectedIds.size === 0}
             >
               <Printer className="mr-1 h-3 w-3" />
               Print Invoice
@@ -307,7 +355,7 @@ export default function OrderListPage() {
               size="sm"
               variant="outline"
               onClick={handleSyncSelected}
-              disabled={isBusy && formHandle.loadingButtonType === "syncSelected"}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "syncSelected")}
             >
               {isBusy && formHandle.loadingButtonType === "syncSelected" ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -320,7 +368,7 @@ export default function OrderListPage() {
               size="sm"
               variant="outline"
               onClick={handleBulkPushCourier}
-              disabled={isBusy && formHandle.loadingButtonType === "pushCourier"}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "pushCourier")}
             >
               {isBusy && formHandle.loadingButtonType === "pushCourier" ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -333,7 +381,7 @@ export default function OrderListPage() {
               size="sm"
               variant="outline"
               onClick={handleExportSelected}
-              disabled={isBusy && formHandle.loadingButtonType === "exportSelected"}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "exportSelected")}
             >
               {isBusy && formHandle.loadingButtonType === "exportSelected" ? (
                 <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -342,16 +390,17 @@ export default function OrderListPage() {
               )}
               Export Selected
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setSelectedIds(new Set())}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
-      )}
 
       <Card>
         <CardHeader>
@@ -365,25 +414,30 @@ export default function OrderListPage() {
                 className="pl-9"
               />
             </div>
-            <Select
-              value={status}
-              onValueChange={(val) => {
-                setStatus(val === "all" ? "" : val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {Object.values(OrderStatusEnum).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {ORDER_STATUS_LABELS[s] ?? s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {group !== "trash" && (
+              <Select
+                value={status}
+                onValueChange={(val) => {
+                  setStatus(val === "all" ? "" : val);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {(groupConfig && groupConfig.statuses.length > 0
+                    ? groupConfig.statuses
+                    : Object.values(OrderStatusEnum)
+                  ).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {ORDER_STATUS_LABELS[s as OrderStatusEnum] ?? s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select
               value={source}
               onValueChange={(val) => {
@@ -516,6 +570,7 @@ export default function OrderListPage() {
                       <TableHead>Source</TableHead>
                       <TableHead>Courier</TableHead>
                       <TableHead>Date</TableHead>
+                      {group !== "trash" && <TableHead className="w-16">Action</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -580,6 +635,23 @@ export default function OrderListPage() {
                         <TableCell className="text-muted-foreground whitespace-nowrap">
                           {formatDateTime(order.createdAt)}
                         </TableCell>
+                        {group !== "trash" && (
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                              onClick={() =>
+                                setTrashTarget({
+                                  id: order.id,
+                                  invoiceId: order.invoiceId,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -596,6 +668,34 @@ export default function OrderListPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Trash confirmation dialog */}
+      <Dialog
+        open={!!trashTarget}
+        onOpenChange={(open) => !open && setTrashTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Trash</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to move order{" "}
+              <span className="font-semibold text-foreground">
+                {trashTarget?.invoiceId}
+              </span>{" "}
+              to trash? You can find it later in the Trash section.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTrashTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleTrashOrder}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Move to Trash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

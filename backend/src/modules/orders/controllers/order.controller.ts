@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Patch,
+    Delete,
     Param,
     Body,
     Query,
@@ -146,6 +147,16 @@ export class OrderController {
     @HttpCode(HttpStatus.OK)
     async findOne(@Param('id', ParseUUIDPipe) id: string) {
         return this.orderService.getOrderById(id);
+    }
+
+    /**
+     * Soft-delete (trash) an order
+     * DELETE /api/orders/:id
+     */
+    @Delete(':id')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async trashOrder(@Param('id', ParseUUIDPipe) id: string) {
+        await this.orderService.trashOrder(id);
     }
 
     /**

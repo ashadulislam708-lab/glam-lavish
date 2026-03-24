@@ -39,7 +39,7 @@ import { getOrderStatusColor, getOrderSourceColor } from "~/utils/badges";
 import { SHIPPING_ZONE_LABELS } from "~/utils/shipping";
 import { ALLOWED_TRANSITIONS } from "~/constants/orderTransitions";
 import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
-import { OrderStatusEnum } from "~/enums";
+import { OrderStatusEnum, OrderSourceEnum } from "~/enums";
 import {
   ArrowLeft,
   Loader2,
@@ -183,6 +183,25 @@ export default function OrderDetailPage() {
       });
   }, [id, dispatch]);
 
+  const handleSyncOrder = useCallback(() => {
+    if (!id) return;
+    setFormHandle({ isLoading: true, loadingButtonType: "sync" });
+    orderService
+      .syncSelectedOrders([id])
+      .then(() => {
+        toast.success("Order synced with WooCommerce successfully");
+        dispatch(fetchOrderDetail(id));
+      })
+      .catch((err: unknown) => {
+        toast.error(
+          (err as { message?: string })?.message || "Failed to sync order"
+        );
+      })
+      .finally(() => {
+        setFormHandle({ isLoading: false, loadingButtonType: "" });
+      });
+  }, [id, dispatch]);
+
   const handleShowQr = useCallback(() => {
     if (!id) return;
     if (qrCodeUrl) {
@@ -303,6 +322,24 @@ export default function OrderDetailPage() {
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
               Push to Courier
+            </Button>
+          )}
+          {order.source === OrderSourceEnum.WOOCOMMERCE && (
+            <Button
+              variant="outline"
+              onClick={handleSyncOrder}
+              disabled={
+                formHandle.isLoading &&
+                formHandle.loadingButtonType === "sync"
+              }
+            >
+              {formHandle.isLoading &&
+              formHandle.loadingButtonType === "sync" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Sync Order
             </Button>
           )}
         </div>

@@ -290,15 +290,14 @@ export default function ProductListPage() {
           ) : (
             <>
               {/* Bulk Action Bar */}
-              {selectedIds.size > 0 && (
-                <div className="mb-4 flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2">
+                <div className={cn("mb-4 flex items-center gap-3 rounded-lg border px-4 py-2", selectedIds.size > 0 ? "bg-muted/50" : "bg-muted/30 opacity-60")}>
                   <span className="text-sm font-medium">
-                    {selectedIds.size} product{selectedIds.size > 1 ? "s" : ""} selected
+                    {selectedIds.size} product{selectedIds.size !== 1 ? "s" : ""} selected
                   </span>
                   <Button
                     size="sm"
                     onClick={handleBulkSync}
-                    disabled={isBulkSyncing}
+                    disabled={selectedIds.size === 0 || isBulkSyncing}
                   >
                     {isBulkSyncing ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -311,7 +310,7 @@ export default function ProductListPage() {
                     size="sm"
                     variant="outline"
                     onClick={handleExportCSV}
-                    disabled={isExporting}
+                    disabled={selectedIds.size === 0 || isExporting}
                   >
                     {isExporting ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -320,14 +319,15 @@ export default function ProductListPage() {
                     )}
                     Export CSV
                   </Button>
-                  <button
-                    className="ml-auto text-muted-foreground hover:text-foreground"
-                    onClick={() => setSelectedIds(new Set())}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {selectedIds.size > 0 && (
+                    <button
+                      className="ml-auto text-muted-foreground hover:text-foreground"
+                      onClick={() => setSelectedIds(new Set())}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              )}
 
               <div className="overflow-x-auto">
                 <Table>

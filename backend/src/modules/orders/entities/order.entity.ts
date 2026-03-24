@@ -4,6 +4,7 @@ import {
     PrimaryGeneratedColumn,
     CreateDateColumn,
     UpdateDateColumn,
+    DeleteDateColumn,
     ManyToOne,
     OneToMany,
     JoinColumn,
@@ -156,4 +157,7 @@ export class Order {
 
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
     updatedAt: Date;
+
+    @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+    deletedAt: Date | null;
 }

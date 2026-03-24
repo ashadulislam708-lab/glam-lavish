@@ -38,8 +38,12 @@ export default function InvoiceTemplate({
             margin: "0 auto",
           }}
         />
-        <div style={{ fontSize: "8px", marginTop: "2px", color: "#000" }}>
-          www.glamlavish.com | 09678-770181
+        <div style={{ fontSize: "8px", marginTop: "2px", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          www.glamlavish.com
+          <span style={{ margin: "0 2px" }}>|</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          09678-770181
         </div>
       </div>
 
@@ -52,21 +56,21 @@ export default function InvoiceTemplate({
         }}
       >
         <div>
-          <span style={{ fontWeight: "normal" }}>Invoice No:</span>{" "}
+          <span style={{ fontWeight: "bold" }}>Invoice No:</span>{" "}
           {invoice.invoiceId}
         </div>
         <div>
-          <span style={{ fontWeight: "normal" }}>Invoice Date:</span>{" "}
+          <span style={{ fontWeight: "bold" }}>Invoice Date:</span>{" "}
           {formatDate(invoice.date)}
         </div>
         {invoice.courierName && (
           <div>
-            <span style={{ fontWeight: "normal" }}>Courier:</span>{" "}
+            <span style={{ fontWeight: "bold" }}>Courier:</span>{" "}
             {invoice.courierName}
           </div>
         )}
         <div>
-          <span style={{ fontWeight: "normal" }}>Delivery ID:</span>{" "}
+          <span style={{ fontWeight: "bold" }}>Delivery ID:</span>{" "}
           {invoice.deliveryId || "-"}
         </div>
       </div>
@@ -80,7 +84,7 @@ export default function InvoiceTemplate({
       >
         <div
           style={{
-            fontWeight: "normal",
+            fontWeight: "bold",
             marginBottom: "2px",
             fontSize: "10px",
             textTransform: "uppercase",
@@ -89,16 +93,16 @@ export default function InvoiceTemplate({
         >
           Invoice To
         </div>
-        <div>
-          <span style={{ fontWeight: "normal" }}>Name:</span>{" "}
+        <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           {invoice.customerName}
         </div>
-        <div>
-          <span style={{ fontWeight: "normal" }}>Phone:</span>{" "}
+        <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           {invoice.customerPhone}
         </div>
-        <div style={{ fontSize: "10px" }}>
-          <span style={{ fontWeight: "normal" }}>Address:</span>{" "}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "3px", fontSize: "10px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           {invoice.customerAddress}
         </div>
       </div>
@@ -126,7 +130,7 @@ export default function InvoiceTemplate({
                   paddingBottom: "2px",
                   paddingTop: "2px",
                   width: "35%",
-                  fontWeight: "normal",
+                  fontWeight: "bold",
                 }}
               >
                 Product
@@ -137,7 +141,7 @@ export default function InvoiceTemplate({
                   paddingBottom: "2px",
                   paddingTop: "2px",
                   width: "18%",
-                  fontWeight: "normal",
+                  fontWeight: "bold",
                 }}
               >
                 Color/Size
@@ -148,7 +152,7 @@ export default function InvoiceTemplate({
                   paddingBottom: "2px",
                   paddingTop: "2px",
                   width: "12%",
-                  fontWeight: "normal",
+                  fontWeight: "bold",
                 }}
               >
                 Qty
@@ -159,7 +163,7 @@ export default function InvoiceTemplate({
                   paddingBottom: "2px",
                   paddingTop: "2px",
                   width: "15%",
-                  fontWeight: "normal",
+                  fontWeight: "bold",
                 }}
               >
                 Price
@@ -170,7 +174,7 @@ export default function InvoiceTemplate({
                   paddingBottom: "2px",
                   paddingTop: "2px",
                   width: "20%",
-                  fontWeight: "normal",
+                  fontWeight: "bold",
                 }}
               >
                 Item Total
@@ -237,12 +241,12 @@ export default function InvoiceTemplate({
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>Discount:</span>
-          <span>{invoice.discountAmount ?? 0} TK</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>Sub Total:</span>
           <span>{invoice.subtotal} TK</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <span>Discount:</span>
+          <span>{invoice.discountAmount ?? 0} TK</span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>Delivery Charge:</span>

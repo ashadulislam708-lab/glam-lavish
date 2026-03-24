@@ -61,6 +61,8 @@ export interface FetchOrdersParams {
   page?: number;
   limit?: number;
   status?: string;
+  statuses?: string;
+  trashed?: boolean;
   source?: string;
   startDate?: string;
   endDate?: string;

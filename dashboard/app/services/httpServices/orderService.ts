@@ -67,6 +67,9 @@ export const orderService = {
   getBulkInvoiceData: (ids: string[]) =>
     Promise.allSettled(ids.map((id) => orderService.getInvoiceData(id))),
 
+  trashOrder: (id: string) =>
+    httpService.delete(`/orders/${id}`),
+
   bulkPushCourier: (orderIds: string[]) =>
     httpService.post<{
       pushed: number;
