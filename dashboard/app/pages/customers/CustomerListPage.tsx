@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from "~/redux/store/hooks";
 import { fetchCustomers } from "~/services/httpServices/customerService";
 import { customerService } from "~/services/httpServices/customerService";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
@@ -18,9 +19,25 @@ import LoadingSpinner from "~/components/atoms/LoadingSpinner";
 import EmptyState from "~/components/atoms/EmptyState";
 import { cn } from "~/lib/utils";
 import { formatBDT, formatDateTime } from "~/utils/formatting";
-import { FileDown, Search, Loader2, X } from "lucide-react";
+import { getOrderStatusColor } from "~/utils/badges";
+import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
+import { OrderStatusEnum } from "~/enums";
+import {
+  FileDown,
+  Search,
+  Loader2,
+  X,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { FormHandleState } from "~/types/common";
+import type { CustomerOrder } from "~/types/customer";
+
+interface PhoneOrdersState {
+  orders: CustomerOrder[];
+  loading: boolean;
+}
 
 export default function CustomerListPage() {
   const dispatch = useAppDispatch();
@@ -38,6 +55,12 @@ export default function CustomerListPage() {
   // Bulk selection state (keyed by phone number)
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
 
+  // Expand/collapse state
+  const [expandedPhones, setExpandedPhones] = useState<Set<string>>(new Set());
+  const [phoneOrders, setPhoneOrders] = useState<
+    Record<string, PhoneOrdersState>
+  >({});
+
   const loadCustomers = useCallback(() => {
     dispatch(
       fetchCustomers({
@@ -52,9 +75,11 @@ export default function CustomerListPage() {
     loadCustomers();
   }, [loadCustomers]);
 
-  // Clear selection when filters/page change
+  // Clear selection and expanded state when filters/page change
   useEffect(() => {
     setSelectedPhones(new Set());
+    setExpandedPhones(new Set());
+    setPhoneOrders({});
   }, [page, search]);
 
   const handleSearchChange = useCallback((value: string) => {
@@ -91,6 +116,43 @@ export default function CustomerListPage() {
   const allSelected =
     customers.length > 0 &&
     customers.every((c) => selectedPhones.has(c.customerPhone));
+
+  const toggleExpand = useCallback(
+    async (phone: string) => {
+      if (expandedPhones.has(phone)) {
+        setExpandedPhones((prev) => {
+          const next = new Set(prev);
+          next.delete(phone);
+          return next;
+        });
+        return;
+      }
+
+      setExpandedPhones((prev) => new Set(prev).add(phone));
+
+      // Only fetch if not already loaded
+      if (!phoneOrders[phone]) {
+        setPhoneOrders((prev) => ({
+          ...prev,
+          [phone]: { orders: [], loading: true },
+        }));
+        try {
+          const result = await customerService.getCustomerOrders(phone);
+          setPhoneOrders((prev) => ({
+            ...prev,
+            [phone]: { orders: result.data, loading: false },
+          }));
+        } catch {
+          setPhoneOrders((prev) => ({
+            ...prev,
+            [phone]: { orders: [], loading: false },
+          }));
+          toast.error("Failed to load orders");
+        }
+      }
+    },
+    [expandedPhones, phoneOrders]
+  );
 
   const handleExportAll = useCallback(() => {
     setFormHandle({ isLoading: true, loadingButtonType: "exportAll" });
@@ -138,6 +200,7 @@ export default function CustomerListPage() {
   }, [selectedPhones]);
 
   const isBusy = formHandle.isLoading;
+  const totalColumns = 8; // expand + checkbox + name + phone + addresses + orders + total + last order
 
   return (
     <div className="space-y-6">
@@ -247,6 +310,7 @@ export default function CustomerListPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8" />
                       <TableHead className="w-10">
                         <input
                           type="checkbox"
@@ -255,8 +319,8 @@ export default function CustomerListPage() {
                           className="h-4 w-4 rounded border-gray-300"
                         />
                       </TableHead>
-                      <TableHead>Name</TableHead>
                       <TableHead>Phone</TableHead>
+                      <TableHead>Name</TableHead>
                       <TableHead>Addresses</TableHead>
                       <TableHead>Orders</TableHead>
                       <TableHead>Total Spent</TableHead>
@@ -264,65 +328,187 @@ export default function CustomerListPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {customers.map((customer) => (
-                      <TableRow
-                        key={customer.customerPhone}
-                        className={cn(
-                          "hover:bg-gray-50",
-                          selectedPhones.has(customer.customerPhone) &&
-                            "bg-blue-50/50"
-                        )}
-                      >
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={selectedPhones.has(
-                              customer.customerPhone
+                    {customers.map((customer) => {
+                      const isExpanded = expandedPhones.has(
+                        customer.customerPhone
+                      );
+                      const orderData = phoneOrders[customer.customerPhone];
+
+                      return (
+                        <>
+                          {/* Main customer row */}
+                          <TableRow
+                            key={customer.customerPhone}
+                            className={cn(
+                              "hover:bg-gray-50 cursor-pointer",
+                              selectedPhones.has(customer.customerPhone) &&
+                                "bg-blue-50/50",
+                              isExpanded && "bg-gray-50"
                             )}
-                            onChange={() =>
-                              toggleSelect(customer.customerPhone)
+                            onClick={() =>
+                              toggleExpand(customer.customerPhone)
                             }
-                            className="h-4 w-4 rounded border-gray-300"
-                          />
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {customer.customerName}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {customer.customerPhone}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-1 max-w-[350px]">
-                            {customer.addresses
-                              .slice(0, 2)
-                              .map((addr, idx) => (
-                                <span
-                                  key={idx}
-                                  className="text-xs text-muted-foreground leading-snug"
-                                  title={addr}
-                                >
-                                  {addr}
-                                </span>
-                              ))}
-                            {customer.addresses.length > 2 && (
-                              <span
-                                className="text-xs text-blue-600 cursor-default"
-                                title={customer.addresses.slice(2).join("\n")}
-                              >
-                                +{customer.addresses.length - 2} more address{customer.addresses.length - 2 > 1 ? "es" : ""}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>{customer.totalOrders}</TableCell>
-                        <TableCell className="font-medium">
-                          {formatBDT(customer.totalSpent)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(customer.lastOrderDate)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                          >
+                            <TableCell className="w-8 px-2">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </TableCell>
+                            <TableCell
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedPhones.has(
+                                  customer.customerPhone
+                                )}
+                                onChange={() =>
+                                  toggleSelect(customer.customerPhone)
+                                }
+                                className="h-4 w-4 rounded border-gray-300"
+                              />
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {customer.customerPhone}
+                            </TableCell>
+                            <TableCell>
+                              {customer.customerName}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1 max-w-[350px]">
+                                {customer.addresses
+                                  .slice(0, 2)
+                                  .map((addr, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="text-xs text-muted-foreground leading-snug"
+                                      title={addr}
+                                    >
+                                      {addr}
+                                    </span>
+                                  ))}
+                                {customer.addresses.length > 2 && (
+                                  <span
+                                    className="text-xs text-blue-600 cursor-default"
+                                    title={customer.addresses
+                                      .slice(2)
+                                      .join("\n")}
+                                  >
+                                    +{customer.addresses.length - 2} more
+                                    address
+                                    {customer.addresses.length - 2 > 1
+                                      ? "es"
+                                      : ""}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{customer.totalOrders}</TableCell>
+                            <TableCell className="font-medium">
+                              {formatBDT(customer.totalSpent)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">
+                              {formatDateTime(customer.lastOrderDate)}
+                            </TableCell>
+                          </TableRow>
+
+                          {/* Expanded order sub-rows */}
+                          {isExpanded && (
+                            <>
+                              {orderData?.loading ? (
+                                <TableRow key={`${customer.customerPhone}-loading`}>
+                                  <TableCell
+                                    colSpan={totalColumns}
+                                    className="bg-muted/30"
+                                  >
+                                    <div className="flex items-center justify-center py-3">
+                                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground mr-2" />
+                                      <span className="text-sm text-muted-foreground">
+                                        Loading orders...
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ) : orderData?.orders.length === 0 ? (
+                                <TableRow key={`${customer.customerPhone}-empty`}>
+                                  <TableCell
+                                    colSpan={totalColumns}
+                                    className="bg-muted/30 text-center text-sm text-muted-foreground py-3"
+                                  >
+                                    No orders found
+                                  </TableCell>
+                                </TableRow>
+                              ) : (
+                                <>
+                                  {/* Sub-header row */}
+                                  <TableRow key={`${customer.customerPhone}-header`} className="bg-muted/20">
+                                    <TableCell />
+                                    <TableCell />
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Invoice
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Name
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Address
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Status
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Amount
+                                    </TableCell>
+                                    <TableCell className="text-xs font-semibold text-muted-foreground">
+                                      Date
+                                    </TableCell>
+                                  </TableRow>
+                                  {orderData?.orders.map((order) => (
+                                    <TableRow
+                                      key={order.invoiceId}
+                                      className="bg-muted/10 hover:bg-muted/20"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <TableCell />
+                                      <TableCell />
+                                      <TableCell className="text-sm font-medium text-blue-600">
+                                        {order.invoiceId}
+                                      </TableCell>
+                                      <TableCell className="text-sm">
+                                        {order.customerName}
+                                      </TableCell>
+                                      <TableCell className="text-xs text-muted-foreground max-w-[300px]">
+                                        {order.customerAddress}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge
+                                          variant="outline"
+                                          className={getOrderStatusColor(
+                                            order.status as OrderStatusEnum
+                                          )}
+                                        >
+                                          {ORDER_STATUS_LABELS[
+                                            order.status as OrderStatusEnum
+                                          ] ?? order.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-sm font-medium">
+                                        {formatBDT(order.grandTotal)}
+                                      </TableCell>
+                                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                        {formatDateTime(order.createdAt)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </>
+                              )}
+                            </>
+                          )}
+                        </>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

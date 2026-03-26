@@ -7,6 +7,15 @@ export interface Customer {
   lastOrderDate: string;
 }
 
+export interface CustomerOrder {
+  invoiceId: string;
+  customerName: string;
+  customerAddress: string;
+  status: string;
+  grandTotal: number;
+  createdAt: string;
+}
+
 export interface FetchCustomersParams {
   page?: number;
   limit?: number;

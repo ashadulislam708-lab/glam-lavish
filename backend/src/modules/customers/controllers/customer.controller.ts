@@ -1,6 +1,7 @@
 import {
     Controller,
     Get,
+    Param,
     Query,
     HttpCode,
     HttpStatus,
@@ -9,6 +10,7 @@ import {
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomerService } from '../services/customer.service.js';
 import { ListCustomersDto } from '../dto/list-customers.dto.js';
+import { CustomerOrdersDto } from '../dto/customer-orders.dto.js';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
@@ -31,5 +33,18 @@ export class CustomerController {
             `attachment; filename=customers-${crypto.randomUUID()}.csv`,
         );
         res.send(csv);
+    }
+
+    @Get(':phone/orders')
+    @HttpCode(HttpStatus.OK)
+    async getCustomerOrders(
+        @Param('phone') phone: string,
+        @Query() dto: CustomerOrdersDto,
+    ) {
+        return this.customerService.getOrdersByPhone(
+            phone,
+            dto.page,
+            dto.limit,
+        );
     }
 }
