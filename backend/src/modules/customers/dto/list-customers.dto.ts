@@ -26,7 +26,8 @@ export class ListCustomersDto {
     search?: string;
 
     @ApiPropertyOptional({
-        description: 'Comma-separated phone numbers to filter by (for bulk export)',
+        description:
+            'Comma-separated phone numbers to filter by (for bulk export)',
     })
     @IsOptional()
     @IsString()

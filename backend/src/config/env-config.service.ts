@@ -103,6 +103,8 @@ class EnvConfigService {
             STEADFAST_SECRET_KEY:
                 this.getValue('STEADFAST_SECRET_KEY', false) || '',
             STEADFAST_BASE_URL: 'https://portal.packzy.com/api/v1',
+            STEADFAST_WEBHOOK_SECRET:
+                this.getValue('STEADFAST_WEBHOOK_SECRET', false) || '',
         };
     }
 

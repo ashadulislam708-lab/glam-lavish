@@ -88,19 +88,26 @@ export default function InvoicePrintPage() {
         @media print {
           @page {
             size: 3in 4in;
-            margin: 2mm;
+            margin: 0;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 3in !important;
           }
           body * {
             visibility: hidden;
           }
           #invoice-print, #invoice-print * {
-            visibility: visible;
+            visibility: visible !important;
           }
           #invoice-print {
             position: absolute;
             left: 0;
             top: 0;
             width: 3in;
+            margin: 0;
+            padding: 0;
           }
         }
       `}</style>

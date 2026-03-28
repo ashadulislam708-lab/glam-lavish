@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, SelectQueryBuilder } from 'typeorm';
 import { Order } from '../entities/order.entity.js';
 import { OrderItem } from '../entities/order-item.entity.js';
+import { OrderNote } from '../entities/order-note.entity.js';
 import { Product } from '../../products/entities/product.entity.js';
 import { ProductVariation } from '../../products/entities/product-variation.entity.js';
 import { StockAdjustmentLog } from '../../products/entities/stock-adjustment-log.entity.js';
@@ -15,6 +16,7 @@ import { CreateOrderDto } from '../dto/create-order.dto.js';
 import { UpdateOrderDto } from '../dto/update-order.dto.js';
 import { UpdateOrderStatusDto } from '../dto/update-order-status.dto.js';
 import { ListOrdersDto } from '../dto/list-orders.dto.js';
+import { SteadfastWebhookDto } from '../dto/steadfast-webhook.dto.js';
 import { OrderStatusEnum } from '../../../shared/enums/order-status.enum.js';
 import { OrderSourceEnum } from '../../../shared/enums/order-source.enum.js';
 import { ShippingZoneEnum } from '../../../shared/enums/shipping-zone.enum.js';
@@ -48,6 +50,8 @@ export class OrderService {
         private readonly variationRepository: Repository<ProductVariation>,
         @InjectRepository(StockAdjustmentLog)
         private readonly stockLogRepository: Repository<StockAdjustmentLog>,
+        @InjectRepository(OrderNote)
+        private readonly orderNoteRepository: Repository<OrderNote>,
         private readonly dataSource: DataSource,
         private readonly steadfastService: SteadfastService,
         private readonly invoiceService: InvoiceService,
@@ -403,7 +407,6 @@ export class OrderService {
                     savedItems.push(savedItem);
                 }
 
-                // 7. Courier push is manual — staff triggers via "Push to Courier" button
                 return {
                     order: { ...savedOrder, items: savedItems },
                     stockDecrementedProducts,
@@ -947,31 +950,32 @@ export class OrderService {
             );
         }
 
-        const courierResult = await this.steadfastService.createOrder({
-            invoice: order.invoiceId,
-            recipient_name: order.customerName,
-            recipient_phone: order.customerPhone,
-            recipient_address: order.customerAddress,
-            cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
-        });
+        try {
+            const courierResult = await this.steadfastService.createOrder({
+                invoice: order.invoiceId,
+                recipient_name: order.customerName,
+                recipient_phone: order.customerPhone,
+                recipient_address: order.customerAddress,
+                cod_amount:
+                    Number(order.grandTotal) - Number(order.advanceAmount),
+            });
 
-        if (!courierResult) {
+            await this.orderRepository.update(id, {
+                courierConsignmentId: courierResult.consignmentId,
+                courierTrackingCode: courierResult.trackingCode,
+            });
+
+            return {
+                id: order.id,
+                invoiceId: order.invoiceId,
+                courierConsignmentId: courierResult.consignmentId,
+                courierTrackingCode: courierResult.trackingCode,
+            };
+        } catch (err: any) {
             throw new BadRequestException(
-                'Steadfast courier push failed. Please try again.',
+                `Steadfast courier push failed: ${err.message}`,
             );
         }
-
-        await this.orderRepository.update(id, {
-            courierConsignmentId: courierResult.consignmentId,
-            courierTrackingCode: courierResult.trackingCode,
-        });
-
-        return {
-            id: order.id,
-            invoiceId: order.invoiceId,
-            courierConsignmentId: courierResult.consignmentId,
-            courierTrackingCode: courierResult.trackingCode,
-        };
     }
 
     /**
@@ -981,11 +985,6 @@ export class OrderService {
         const orders = await this.orderRepository.find({
             where: dto.orderIds.map((id) => ({ id })),
         });
-
-        const terminalStatuses = [
-            OrderStatusEnum.CANCELLED,
-            OrderStatusEnum.REFUNDED,
-        ];
 
         type ResultItem = {
             invoiceId: string;
@@ -1010,12 +1009,6 @@ export class OrderService {
                     invoiceId: o.invoiceId,
                     status: 'skipped',
                     error: 'Not a Steadfast order',
-                });
-            } else if (terminalStatuses.includes(o.status)) {
-                skippedResults.push({
-                    invoiceId: o.invoiceId,
-                    status: 'skipped',
-                    error: `Order is ${o.status}`,
                 });
             } else {
                 eligible.push(o);
@@ -1056,22 +1049,6 @@ export class OrderService {
         const bulkResult =
             await this.steadfastService.createBulkOrder(requests);
 
-        if (!bulkResult) {
-            return {
-                pushed: 0,
-                skipped,
-                errors: eligible.length,
-                results: [
-                    ...skippedResults,
-                    ...eligible.map((o) => ({
-                        invoiceId: o.invoiceId,
-                        status: 'error' as const,
-                        error: 'Steadfast API call failed',
-                    })),
-                ],
-            };
-        }
-
         // Build invoice-to-order map for matching results
         const orderByInvoice = new Map(eligible.map((o) => [o.invoiceId, o]));
 
@@ -1099,7 +1076,7 @@ export class OrderService {
                 pushResults.push({
                     invoiceId: item.invoice,
                     status: 'error',
-                    error: 'Steadfast rejected this order',
+                    error: item.error || 'Steadfast rejected this order',
                 });
             }
         }
@@ -1376,5 +1353,160 @@ export class OrderService {
             names,
             addresses,
         };
+    }
+
+    /**
+     * Handle Steadfast webhook notifications (delivery_status & tracking_update)
+     */
+    async handleSteadfastWebhook(dto: SteadfastWebhookDto): Promise<void> {
+        // Look up order by consignment_id first, then by invoice
+        let order = await this.orderRepository.findOne({
+            where: { courierConsignmentId: String(dto.consignment_id) },
+            relations: ['items'],
+        });
+
+        if (!order && dto.invoice) {
+            order = await this.orderRepository.findOne({
+                where: { invoiceId: dto.invoice },
+                relations: ['items'],
+            });
+        }
+
+        if (!order) {
+            this.logger.warn(
+                `Steadfast webhook: no order found for consignment_id=${dto.consignment_id}, invoice=${dto.invoice}`,
+            );
+            return;
+        }
+
+        if (dto.notification_type === 'delivery_status') {
+            await this.handleSteadfastDeliveryStatus(order, dto);
+        } else if (dto.notification_type === 'tracking_update') {
+            await this.handleSteadfastTrackingUpdate(order, dto);
+        } else {
+            this.logger.warn(
+                `Steadfast webhook: unknown notification_type=${dto.notification_type} for order ${order.invoiceId}`,
+            );
+        }
+    }
+
+    /**
+     * Handle Steadfast delivery_status webhook
+     * Maps Steadfast delivery status to internal OrderStatusEnum and applies side effects
+     */
+    private async handleSteadfastDeliveryStatus(
+        order: Order,
+        dto: SteadfastWebhookDto,
+    ): Promise<void> {
+        const steadfastStatus = dto.status?.toLowerCase();
+
+        const statusMap: Record<string, OrderStatusEnum | null> = {
+            pending: null,
+            delivered: OrderStatusEnum.COMPLETED,
+            partial_delivered: OrderStatusEnum.COMPLETED,
+            cancelled: OrderStatusEnum.CANCELLED,
+            unknown: null,
+        };
+
+        const newStatus = statusMap[steadfastStatus ?? ''] ?? null;
+
+        if (newStatus === null) {
+            this.logger.log(
+                `Steadfast webhook: status "${steadfastStatus}" for order ${order.invoiceId} — no status change`,
+            );
+            return;
+        }
+
+        // Skip if already in target status
+        if (order.status === newStatus) {
+            this.logger.log(
+                `Steadfast webhook: order ${order.invoiceId} already in ${newStatus} — skipping`,
+            );
+            return;
+        }
+
+        this.logger.log(
+            `Steadfast webhook: updating order ${order.invoiceId} from ${order.status} to ${newStatus}`,
+        );
+
+        // Handle stock restoration for CANCELLED status
+        const stockRestoreStatuses = [
+            OrderStatusEnum.CANCELLED,
+            OrderStatusEnum.REFUNDED,
+            OrderStatusEnum.FAILED,
+        ];
+
+        if (stockRestoreStatuses.includes(newStatus)) {
+            try {
+                await this.dataSource.transaction(async (manager) => {
+                    await restoreOrderItemsStock(
+                        manager,
+                        order.items,
+                        null,
+                        'Steadfast ' +
+                            (steadfastStatus === 'cancelled'
+                                ? 'Cancelled'
+                                : newStatus),
+                        order.invoiceId,
+                    );
+                });
+
+                // Push restored stock to WooCommerce (non-blocking)
+                for (const item of order.items) {
+                    if (item.productId) {
+                        this.wooCommerceService
+                            .pushStockToWc(
+                                item.productId,
+                                item.variationId || null,
+                            )
+                            .catch((err) => {
+                                this.logger.error(
+                                    `Failed to push stock to WC after Steadfast ${steadfastStatus} for product ${item.productId}: ${err.message}`,
+                                );
+                            });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.error(
+                    `Steadfast webhook: stock restoration failed for order ${order.invoiceId}: ${err.message}`,
+                );
+            }
+        }
+
+        // Update order status and history (skip courier cancel — Steadfast already handled it)
+        const updatedHistory = [...(order.statusHistory || []), newStatus];
+        await this.orderRepository.update(order.id, {
+            status: newStatus,
+            statusHistory: updatedHistory,
+        });
+
+        this.logger.log(
+            `Steadfast webhook: order ${order.invoiceId} status updated to ${newStatus}`,
+        );
+    }
+
+    /**
+     * Handle Steadfast tracking_update webhook
+     * Saves tracking message as an order note
+     */
+    private async handleSteadfastTrackingUpdate(
+        order: Order,
+        dto: SteadfastWebhookDto,
+    ): Promise<void> {
+        if (!dto.tracking_message) {
+            return;
+        }
+
+        this.logger.log(
+            `Steadfast webhook: tracking update for order ${order.invoiceId}: ${dto.tracking_message}`,
+        );
+
+        const note = this.orderNoteRepository.create({
+            orderId: order.id,
+            content: `[Steadfast Tracking] ${dto.tracking_message}`,
+            createdById: null,
+        });
+
+        await this.orderNoteRepository.save(note);
     }
 }

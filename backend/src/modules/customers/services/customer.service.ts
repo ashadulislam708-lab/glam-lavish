@@ -140,14 +140,23 @@ export class CustomerService {
             [normalized, limit, offset],
         );
 
-        const data = rows.map((row: { invoiceId: string; customerName: string; customerAddress: string; status: string; grandTotal: string; createdAt: string }) => ({
-            invoiceId: row.invoiceId,
-            customerName: row.customerName,
-            customerAddress: row.customerAddress,
-            status: row.status,
-            grandTotal: parseFloat(row.grandTotal) || 0,
-            createdAt: row.createdAt,
-        }));
+        const data = rows.map(
+            (row: {
+                invoiceId: string;
+                customerName: string;
+                customerAddress: string;
+                status: string;
+                grandTotal: string;
+                createdAt: string;
+            }) => ({
+                invoiceId: row.invoiceId,
+                customerName: row.customerName,
+                customerAddress: row.customerAddress,
+                status: row.status,
+                grandTotal: parseFloat(row.grandTotal) || 0,
+                createdAt: row.createdAt,
+            }),
+        );
 
         return {
             data,
@@ -185,9 +194,16 @@ export class CustomerService {
             params.push(searchPattern, searchPattern);
         }
 
-        const rows: { invoiceId: string; customerName: string; customerPhone: string; customerAddress: string; status: string; grandTotal: string; createdAt: string }[] =
-            await this.orderRepository.manager.query(
-                `SELECT
+        const rows: {
+            invoiceId: string;
+            customerName: string;
+            customerPhone: string;
+            customerAddress: string;
+            status: string;
+            grandTotal: string;
+            createdAt: string;
+        }[] = await this.orderRepository.manager.query(
+            `SELECT
                     invoice_id AS "invoiceId",
                     customer_name AS "customerName",
                     ${phoneNorm} AS "customerPhone",
@@ -198,8 +214,8 @@ export class CustomerService {
                 FROM orders
                 WHERE ${whereClause}
                 ORDER BY created_at DESC`,
-                params,
-            );
+            params,
+        );
 
         const headers = [
             'Invoice ID',

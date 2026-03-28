@@ -18,31 +18,30 @@ export default function InvoiceTemplate({
       style={{
         fontFamily: "Arial, 'Helvetica Neue', Helvetica, sans-serif",
         width: "3in",
-        minHeight: "4in",
-        fontSize: "11px",
-        lineHeight: "1.3",
+        fontSize: "9px",
+        lineHeight: "1.2",
         color: "#000",
-        padding: "6px",
+        padding: "4px",
         pageBreakBefore: pageBreak ? "always" : undefined,
       }}
     >
       {/* Logo */}
-      <div style={{ textAlign: "center", marginBottom: "6px" }}>
+      <div style={{ textAlign: "center", marginBottom: "3px" }}>
         <img
           src="/logo.png"
           alt="Glam Lavish"
           style={{
-            maxWidth: "1.6in",
+            maxWidth: "1.2in",
             height: "auto",
             display: "block",
             margin: "0 auto",
           }}
         />
-        <div style={{ fontSize: "8px", marginTop: "2px", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <div style={{ fontSize: "7px", marginTop: "2px", color: "#000", display: "flex", alignItems: "center", justifyContent: "center", gap: "3px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           www.glamlavish.com
           <span style={{ margin: "0 2px" }}>|</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           09678-770181
         </div>
       </div>
@@ -51,8 +50,8 @@ export default function InvoiceTemplate({
       <div
         style={{
           borderBottom: "1px dashed #ccc",
-          padding: "4px 0",
-          marginBottom: "6px",
+          padding: "2px 0",
+          marginBottom: "3px",
         }}
       >
         <div>
@@ -78,15 +77,15 @@ export default function InvoiceTemplate({
       {/* Invoice To */}
       <div
         style={{
-          paddingBottom: "4px",
-          marginBottom: "6px",
+          paddingBottom: "2px",
+          marginBottom: "3px",
         }}
       >
         <div
           style={{
             fontWeight: "bold",
-            marginBottom: "2px",
-            fontSize: "10px",
+            marginBottom: "1px",
+            fontSize: "8px",
             textTransform: "uppercase",
             letterSpacing: "0.5px",
           }}
@@ -94,15 +93,15 @@ export default function InvoiceTemplate({
           Invoice To
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           {invoice.customerName}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           {invoice.customerPhone}
         </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "3px", fontSize: "10px" }}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "3px", fontSize: "8px" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "1px" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
           {invoice.customerAddress}
         </div>
       </div>
@@ -111,15 +110,15 @@ export default function InvoiceTemplate({
       <div
         style={{
           borderTop: "1px solid #000",
-          paddingBottom: "4px",
-          marginBottom: "6px",
+          paddingBottom: "2px",
+          marginBottom: "3px",
         }}
       >
         <table
           style={{
             width: "100%",
             borderCollapse: "collapse",
-            fontSize: "10px",
+            fontSize: "8px",
           }}
         >
           <thead>
@@ -127,8 +126,8 @@ export default function InvoiceTemplate({
               <th
                 style={{
                   textAlign: "left",
-                  paddingBottom: "2px",
-                  paddingTop: "2px",
+                  paddingBottom: "1px",
+                  paddingTop: "1px",
                   width: "35%",
                   fontWeight: "bold",
                 }}
@@ -138,8 +137,8 @@ export default function InvoiceTemplate({
               <th
                 style={{
                   textAlign: "center",
-                  paddingBottom: "2px",
-                  paddingTop: "2px",
+                  paddingBottom: "1px",
+                  paddingTop: "1px",
                   width: "18%",
                   fontWeight: "bold",
                 }}
@@ -149,8 +148,8 @@ export default function InvoiceTemplate({
               <th
                 style={{
                   textAlign: "center",
-                  paddingBottom: "2px",
-                  paddingTop: "2px",
+                  paddingBottom: "1px",
+                  paddingTop: "1px",
                   width: "12%",
                   fontWeight: "bold",
                 }}
@@ -160,8 +159,8 @@ export default function InvoiceTemplate({
               <th
                 style={{
                   textAlign: "center",
-                  paddingBottom: "2px",
-                  paddingTop: "2px",
+                  paddingBottom: "1px",
+                  paddingTop: "1px",
                   width: "15%",
                   fontWeight: "bold",
                 }}
@@ -171,8 +170,8 @@ export default function InvoiceTemplate({
               <th
                 style={{
                   textAlign: "right",
-                  paddingBottom: "2px",
-                  paddingTop: "2px",
+                  paddingBottom: "1px",
+                  paddingTop: "1px",
                   width: "20%",
                   fontWeight: "bold",
                 }}
@@ -195,7 +194,7 @@ export default function InvoiceTemplate({
                 <td
                   style={{
                     textAlign: "left",
-                    padding: "2px 0",
+                    padding: "1px 0",
                     maxWidth: "100px",
                     wordBreak: "break-word",
                   }}
@@ -205,7 +204,7 @@ export default function InvoiceTemplate({
                 <td
                   style={{
                     textAlign: "center",
-                    padding: "2px 0",
+                    padding: "1px 0",
                     maxWidth: "55px",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -214,13 +213,13 @@ export default function InvoiceTemplate({
                 >
                   {item.variation || "-"}
                 </td>
-                <td style={{ textAlign: "center", padding: "2px 0" }}>
+                <td style={{ textAlign: "center", padding: "1px 0" }}>
                   {item.quantity}
                 </td>
-                <td style={{ textAlign: "center", padding: "2px 0" }}>
+                <td style={{ textAlign: "center", padding: "1px 0" }}>
                   {item.price}
                 </td>
-                <td style={{ textAlign: "right", padding: "2px 0" }}>
+                <td style={{ textAlign: "right", padding: "1px 0" }}>
                   {item.price * item.quantity}
                 </td>
               </tr>
@@ -236,8 +235,10 @@ export default function InvoiceTemplate({
             showQrCode && invoice.qrCodeDataUrl
               ? "1px dashed #000"
               : "none",
-          paddingBottom: "4px",
-          marginBottom: "6px",
+          paddingBottom: "2px",
+          marginBottom: "3px",
+          fontSize: "9px",
+          lineHeight: "1.15",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -256,7 +257,7 @@ export default function InvoiceTemplate({
           style={{
             display: "flex",
             justifyContent: "space-between",
-            marginTop: "2px",
+            marginTop: "1px",
           }}
         >
           <span>Grand Total:</span>
@@ -284,13 +285,13 @@ export default function InvoiceTemplate({
 
       {/* QR Code */}
       {showQrCode && invoice.qrCodeDataUrl && (
-        <div style={{ textAlign: "center", marginBottom: "4px" }}>
+        <div style={{ textAlign: "center", marginBottom: "2px" }}>
           <img
             src={invoice.qrCodeDataUrl}
             alt="Track Order"
-            style={{ width: "60px", height: "60px", margin: "0 auto" }}
+            style={{ width: "48px", height: "48px", margin: "0 auto" }}
           />
-          <div style={{ fontSize: "8px", marginTop: "2px" }}>
+          <div style={{ fontSize: "7px", marginTop: "1px" }}>
             Scan to track your order
           </div>
         </div>
@@ -300,8 +301,8 @@ export default function InvoiceTemplate({
       <div
         style={{
           textAlign: "center",
-          fontSize: "8px",
-          paddingTop: "4px",
+          fontSize: "7px",
+          paddingTop: "2px",
         }}
       >
         Thank you for shopping with Glam Lavish!

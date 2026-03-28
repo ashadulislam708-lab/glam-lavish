@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsInt, Min, Max, IsEnum, IsBoolean } from 'class-validator';
+import {
+    IsOptional,
+    IsString,
+    IsInt,
+    Min,
+    Max,
+    IsEnum,
+    IsBoolean,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatusEnum } from '../../../shared/enums/order-status.enum.js';

@@ -54,28 +54,24 @@ export class SteadfastService {
      */
     async createOrder(
         request: SteadfastCreateOrderRequest,
-    ): Promise<{ consignmentId: string; trackingCode: string } | null> {
+    ): Promise<{ consignmentId: string; trackingCode: string }> {
+        const config = envConfigService.getSteadfastConfig();
+
+        if (!config.STEADFAST_API_KEY || !config.STEADFAST_SECRET_KEY) {
+            throw new Error('Steadfast API credentials not configured');
+        }
+
+        // Normalize phone to 11-digit BD format required by Steadfast
+        const normalizedRequest = {
+            ...request,
+            recipient_phone: normalizeBDPhone(request.recipient_phone),
+        };
+
+        this.logger.log(
+            `Steadfast push: invoice=${request.invoice}, phone=${normalizedRequest.recipient_phone}`,
+        );
+
         try {
-            const config = envConfigService.getSteadfastConfig();
-
-            // Skip if no API key configured
-            if (!config.STEADFAST_API_KEY || !config.STEADFAST_SECRET_KEY) {
-                this.logger.warn(
-                    'Steadfast API credentials not configured. Skipping courier push.',
-                );
-                return null;
-            }
-
-            // Normalize phone to 11-digit BD format required by Steadfast
-            const normalizedRequest = {
-                ...request,
-                recipient_phone: normalizeBDPhone(request.recipient_phone),
-            };
-
-            this.logger.log(
-                `Steadfast push: invoice=${request.invoice}, phone=${normalizedRequest.recipient_phone}`,
-            );
-
             const response =
                 await this.client.post<SteadfastCreateOrderResponse>(
                     '/create_order',
@@ -93,15 +89,29 @@ export class SteadfastService {
                 };
             }
 
+            const errorMsg =
+                response.data.message ||
+                `Steadfast returned status ${response.data.status}`;
             this.logger.error(
-                `Steadfast create order returned non-200: status=${response.data.status}, message=${response.data.message}, invoice=${request.invoice}`,
+                `Steadfast error: invoice=${request.invoice}, message=${errorMsg}`,
             );
-            return null;
+            throw new Error(errorMsg);
         } catch (error: any) {
+            // If it's already our thrown error, re-throw
+            if (!error.response) throw error;
+
+            const apiError =
+                error.response?.data?.message ||
+                error.response?.data?.errors ||
+                error.message;
+            const errorMsg =
+                typeof apiError === 'object'
+                    ? JSON.stringify(apiError)
+                    : String(apiError);
             this.logger.error(
-                `Steadfast API error: invoice=${request.invoice}, httpStatus=${error.response?.status}, message=${error.message}, response=${JSON.stringify(error.response?.data)}`,
+                `Steadfast API error: invoice=${request.invoice}, httpStatus=${error.response?.status}, error=${errorMsg}`,
             );
-            return null;
+            throw new Error(errorMsg);
         }
     }
 
@@ -114,23 +124,15 @@ export class SteadfastService {
      * Steadfast bulk endpoint (/create_order/bulk-order) is unreliable (returns 500),
      * so we use the single endpoint which works reliably.
      */
-    async createBulkOrder(
-        requests: SteadfastCreateOrderRequest[],
-    ): Promise<Array<{
-        invoice: string;
-        consignment_id: number | string | null;
-        tracking_code: string | null;
-        status: string;
-    }> | null> {
-        const config = envConfigService.getSteadfastConfig();
-
-        if (!config.STEADFAST_API_KEY || !config.STEADFAST_SECRET_KEY) {
-            this.logger.warn(
-                'Steadfast API credentials not configured. Skipping bulk courier push.',
-            );
-            return null;
-        }
-
+    async createBulkOrder(requests: SteadfastCreateOrderRequest[]): Promise<
+        Array<{
+            invoice: string;
+            consignment_id: number | string | null;
+            tracking_code: string | null;
+            status: string;
+            error?: string;
+        }>
+    > {
         this.logger.log(
             `Steadfast bulk push: ${requests.length} orders (sequential)`,
         );
@@ -140,23 +142,25 @@ export class SteadfastService {
             consignment_id: number | string | null;
             tracking_code: string | null;
             status: string;
+            error?: string;
         }> = [];
 
         for (const request of requests) {
-            const result = await this.createOrder(request);
-            if (result) {
+            try {
+                const result = await this.createOrder(request);
                 results.push({
                     invoice: request.invoice,
                     consignment_id: result.consignmentId,
                     tracking_code: result.trackingCode,
                     status: 'success',
                 });
-            } else {
+            } catch (err: any) {
                 results.push({
                     invoice: request.invoice,
                     consignment_id: null,
                     tracking_code: null,
                     status: 'error',
+                    error: err.message || 'Unknown error',
                 });
             }
         }
