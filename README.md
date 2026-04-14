@@ -1,7 +1,3 @@
-# glam-lavish
-
-> Inventory management system for Glam Lavish e-commerce business, working alongside an existing WooCommerce store. Provides centralized product management, streamlined order processing, automated Steadfast courier dispatching, thermal invoice generation, and real-time stock synchronization.
-
 ## Features
 
 - Centralized Inventory Control — Manage all products, stock levels, and variations from a single admin panel
@@ -20,7 +16,7 @@
 ## Architecture
 
 ```
-glam-lavish/
+wp-inventory/
 ├── backend/              # NestJS API server
 ├── dashboard/            # React Admin Panel (login, admin operations, public tracking)
 ├── .claude/              # Claude configuration & skills
@@ -38,8 +34,8 @@ glam-lavish/
 
 ```bash
 # Clone repository with submodules
-git clone --recurse-submodules git@github.com:ashadulislam708-lab/glam-lavish.git
-cd "Glam Lavish"
+git clone --recurse-submodules git@github.com:ashadulislam708-lab/wp-inventory.git
+cd "Wp inventory"
 
 # Start all services
 docker-compose up -d
@@ -88,7 +84,7 @@ This project integrates with WooCommerce for bidirectional product/order sync. F
 - WooCommerce 5.0+ installed on your WordPress site
 - WordPress admin access
 - HTTPS enabled on your WooCommerce store (required for webhooks in production)
-- The Glam Lavish backend running and accessible from the internet (for webhook delivery)
+- The wp inventory backend running and accessible from the internet (for webhook delivery)
 
 ### Step 1: Create REST API Credentials in WooCommerce
 
@@ -96,7 +92,7 @@ This project integrates with WooCommerce for bidirectional product/order sync. F
 2. Navigate to **WooCommerce → Settings → Advanced → REST API**
 3. Click **"Add key"**
 4. Fill in the fields:
-   - **Description**: `Glam Lavish Inventory` (or any descriptive name)
+   - **Description**: `Wp Inventory Inventory` (or any descriptive name)
    - **User**: Select your admin user account
    - **Permissions**: **Read/Write**
 5. Click **"Generate API key"**
@@ -120,7 +116,7 @@ WC_WEBHOOK_SECRET=your-webhook-secret-here
 
 | Variable | Description |
 |----------|-------------|
-| `WC_URL` | Full URL of your WooCommerce store (e.g., `https://glamlavish.com`) |
+| `WC_URL` | Full URL of your WooCommerce store (e.g., ``) |
 | `WC_CONSUMER_KEY` | The `ck_...` key generated in Step 1 |
 | `WC_CONSUMER_SECRET` | The `cs_...` secret generated in Step 1 |
 | `WC_WEBHOOK_SECRET` | A custom secret string for HMAC-SHA256 webhook verification. Generate a strong random string (e.g., `openssl rand -hex 32`) |
