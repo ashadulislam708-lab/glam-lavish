@@ -36,10 +36,10 @@ import {
 import LoadingSpinner from "~/components/atoms/LoadingSpinner";
 import { formatBDT, formatDateTime } from "~/utils/formatting";
 import { getOrderStatusColor, getOrderSourceColor } from "~/utils/badges";
-import { SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { SHIPPING_PARTNER_LABELS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
 import { ALLOWED_TRANSITIONS } from "~/constants/orderTransitions";
 import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
-import { OrderStatusEnum, OrderSourceEnum } from "~/enums";
+import { OrderStatusEnum, OrderSourceEnum, ShippingPartnerEnum } from "~/enums";
 import {
   ArrowLeft,
   Loader2,
@@ -173,7 +173,12 @@ export default function OrderDetailPage() {
   );
 
   const handleRetryCourier = useCallback(() => {
-    if (!id) return;
+    if (!id || !order) return;
+    if (order.shippingPartner !== ShippingPartnerEnum.STEADFAST) {
+      const partnerLabel = SHIPPING_PARTNER_LABELS[order.shippingPartner] ?? order.shippingPartner;
+      toast.warning(`Auto courier push is not available for ${partnerLabel} yet. Please update courier info manually.`);
+      return;
+    }
     setFormHandle({ isLoading: true, loadingButtonType: "retry" });
     orderService
       .retryCourier(id)
@@ -189,7 +194,7 @@ export default function OrderDetailPage() {
       .finally(() => {
         setFormHandle({ isLoading: false, loadingButtonType: "" });
       });
-  }, [id, dispatch]);
+  }, [id, order, dispatch]);
 
   const handleOpenCourierEdit = useCallback(() => {
     if (!order) return;
@@ -685,6 +690,20 @@ export default function OrderDetailPage() {
                 {order.customerPhone}
               </a>
             </div>
+            {order.district && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">District:</span>{" "}
+                <span className="font-medium">{order.district}</span>
+              </div>
+            )}
+            {order.upazila && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Upazila:</span>{" "}
+                <span className="font-medium">{order.upazila}</span>
+              </div>
+            )}
             <div className="flex items-start gap-2">
               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">Address:</span>{" "}
@@ -723,7 +742,7 @@ export default function OrderDetailPage() {
           <CardContent className="space-y-2 text-sm">
             <div>
               <span className="text-muted-foreground">Partner:</span>{" "}
-              <span className="font-medium">{order.shippingPartner}</span>
+              <span className="font-medium">{SHIPPING_PARTNER_LABELS[order.shippingPartner] ?? order.shippingPartner}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Consignment ID:</span>{" "}

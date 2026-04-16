@@ -98,6 +98,8 @@ export class InvoiceService {
             customerName: order.customerName,
             customerPhone: order.customerPhone,
             customerAddress: order.customerAddress,
+            district: order.district,
+            upazila: order.upazila,
             items: order.items.map((item) => ({
                 name: item.productName,
                 variation: item.variationLabel,

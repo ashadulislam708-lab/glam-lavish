@@ -30,8 +30,16 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 import { Separator } from "~/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { formatBDT } from "~/utils/formatting";
-import { getShippingFee, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { getShippingFee, SHIPPING_PARTNER_OPTIONS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { DISTRICT_NAMES, getUpazilasForDistrict, getZoneForDistrict } from "~/constants/bangladesh-locations";
 import {
   ShippingZoneEnum,
   ShippingPartnerEnum,
@@ -108,10 +116,21 @@ export default function CreateOrderPage() {
       customerName: "",
       customerPhone: "",
       customerAddress: "",
+      district: "",
+      upazila: "",
       shippingZone: ShippingZoneEnum.INSIDE_DHAKA,
       shippingPartner: ShippingPartnerEnum.STEADFAST,
     },
   });
+
+  // Auto-select shipping zone when district changes
+  const selectedDistrict = form.watch("district");
+  useEffect(() => {
+    if (selectedDistrict) {
+      form.setValue("upazila", "");
+      form.setValue("shippingZone", getZoneForDistrict(selectedDistrict));
+    }
+  }, [selectedDistrict, form]);
 
   // Customer history lookup by phone
   const [customerHistory, setCustomerHistory] = useState<CustomerOrderHistory | null>(null);
@@ -939,14 +958,71 @@ export default function CreateOrderPage() {
                     name="customerAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Address</FormLabel>
+                        <FormLabel>Detailed Address</FormLabel>
                         <FormControl>
-                          <Textarea rows={3} placeholder="Full delivery address" {...field} />
+                          <Textarea rows={3} placeholder="House, road, area..." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="district"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>District</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select district" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {DISTRICT_NAMES.map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="upazila"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Upazila</FormLabel>
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            disabled={!selectedDistrict}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={selectedDistrict ? "Select upazila" : "Select district first"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {getUpazilasForDistrict(selectedDistrict).map((name) => (
+                                <SelectItem key={name} value={name}>
+                                  {name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   <FormField
                     control={form.control}
                     name="shippingZone"
@@ -994,36 +1070,32 @@ export default function CreateOrderPage() {
                         <FormLabel>Shipping Partner</FormLabel>
                         <FormControl>
                           <div className="space-y-2">
-                            <label
-                              className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
-                                field.value === ShippingPartnerEnum.STEADFAST
-                                  ? "border-indigo-600 bg-indigo-50"
-                                  : "border-input hover:bg-accent"
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="shippingPartner"
-                                value={ShippingPartnerEnum.STEADFAST}
-                                checked={field.value === ShippingPartnerEnum.STEADFAST}
-                                onChange={() => field.onChange(ShippingPartnerEnum.STEADFAST)}
-                                className="accent-indigo-600"
-                              />
-                              <span className="text-sm font-medium">Steadfast</span>
-                            </label>
-                            <label
-                              className="flex items-center gap-3 rounded-md border p-3 cursor-not-allowed opacity-60 border-input"
-                            >
-                              <input
-                                type="radio"
-                                name="shippingPartner"
-                                value={ShippingPartnerEnum.PATHAO}
-                                disabled
-                                className="accent-indigo-600"
-                              />
-                              <span className="text-sm font-medium">Pathao</span>
-                              <Badge variant="secondary" className="text-xs ml-auto">Coming Soon</Badge>
-                            </label>
+                            {SHIPPING_PARTNER_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className={`flex items-center gap-3 rounded-md border p-3 transition-colors ${
+                                  option.enabled
+                                    ? field.value === option.value
+                                      ? "border-indigo-600 bg-indigo-50 cursor-pointer"
+                                      : "border-input hover:bg-accent cursor-pointer"
+                                    : "cursor-not-allowed opacity-60 border-input"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="shippingPartner"
+                                  value={option.value}
+                                  checked={field.value === option.value}
+                                  onChange={() => field.onChange(option.value)}
+                                  disabled={!option.enabled}
+                                  className="accent-indigo-600"
+                                />
+                                <span className="text-sm font-medium">{option.label}</span>
+                                {option.badge && (
+                                  <Badge variant="secondary" className="text-xs ml-auto">{option.badge}</Badge>
+                                )}
+                              </label>
+                            ))}
                           </div>
                         </FormControl>
                         <FormMessage />

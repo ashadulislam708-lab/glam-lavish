@@ -59,6 +59,12 @@ export class Order {
     @Column({ name: 'customer_address', type: 'text' })
     customerAddress: string;
 
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    district: string | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    upazila: string | null;
+
     @Column({
         name: 'shipping_zone',
         type: 'enum',

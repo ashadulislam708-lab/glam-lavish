@@ -786,9 +786,10 @@ export class WooCommerceService {
                     manage_stock: false,
                 });
 
-                // Update wcLastSyncedAt for dedup
+                // Update wcLastSyncedAt for dedup and wcStockQuantity for delta sync
                 await this.variationRepository.update(variationId, {
                     wcLastSyncedAt: new Date(),
+                    wcStockQuantity: variation.stockQuantity,
                 });
 
                 // Also update parent product syncStatus
@@ -830,10 +831,11 @@ export class WooCommerceService {
                     stock_status: this.getStockStatus(product.stockQuantity),
                 });
 
-                // Update syncStatus and wcLastSyncedAt for dedup
+                // Update syncStatus, wcLastSyncedAt for dedup, and wcStockQuantity for delta sync
                 await this.productRepository.update(productId, {
                     syncStatus: SyncStatusEnum.SYNCED,
                     wcLastSyncedAt: new Date(),
+                    wcStockQuantity: product.stockQuantity,
                 });
 
                 await this.logSync(
@@ -948,7 +950,10 @@ export class WooCommerceService {
 
                                 await this.variationRepository.update(
                                     variation.id,
-                                    { wcLastSyncedAt: new Date() },
+                                    {
+                                        wcLastSyncedAt: new Date(),
+                                        wcStockQuantity: variation.stockQuantity,
+                                    },
                                 );
                             } catch (varError: any) {
                                 this.logger.error(
@@ -1002,10 +1007,13 @@ export class WooCommerceService {
                         });
                     }
 
-                    // Update sync timestamps
+                    // Update sync timestamps and wcStockQuantity for delta sync
                     await this.productRepository.update(product.id, {
                         syncStatus: SyncStatusEnum.SYNCED,
                         wcLastSyncedAt: new Date(),
+                        ...(product.type !== ProductTypeEnum.VARIABLE
+                            ? { wcStockQuantity: product.stockQuantity }
+                            : {}),
                     });
 
                     summary.success++;
@@ -1046,6 +1054,138 @@ export class WooCommerceService {
 
     private getStockStatus(quantity: number): 'instock' | 'outofstock' {
         return quantity > 0 ? 'instock' : 'outofstock';
+    }
+
+    /**
+     * Apply delta-based stock sync from a WC webhook.
+     * Computes delta = incomingWcStock - storedWcStockQuantity.
+     * If delta != 0, applies it to local stockQuantity.
+     * For NULL wcStockQuantity (first sync after migration), initializes baseline only.
+     */
+    private async applyDeltaStockSync(
+        productId: string,
+        variationId: string | null,
+        incomingWcStock: number,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            if (variationId) {
+                const variation = await manager.findOne(ProductVariation, {
+                    where: { id: variationId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                if (!variation) return;
+
+                if (variation.wcStockQuantity === null) {
+                    variation.wcStockQuantity = incomingWcStock;
+                    await manager.save(ProductVariation, variation);
+                    this.logger.log(
+                        `Initialized wcStockQuantity for variation ${variationId} = ${incomingWcStock}`,
+                    );
+                    return;
+                }
+
+                const delta = incomingWcStock - variation.wcStockQuantity;
+                variation.wcStockQuantity = incomingWcStock;
+
+                if (delta === 0) {
+                    await manager.save(ProductVariation, variation);
+                    return;
+                }
+
+                const previousQty = variation.stockQuantity;
+                let newQty = previousQty + delta;
+
+                if (newQty < 0) {
+                    this.logger.warn(
+                        `WC delta sync would make variation ${variationId} stock negative (current: ${previousQty}, delta: ${delta}). Clamping to 0.`,
+                    );
+                    newQty = 0;
+                }
+
+                variation.stockQuantity = newQty;
+                await manager.save(ProductVariation, variation);
+
+                // Recalculate parent product stock from all variations
+                const allVariations = await manager.find(ProductVariation, {
+                    where: { productId },
+                });
+                const totalStock = allVariations.reduce(
+                    (sum, v) => sum + v.stockQuantity,
+                    0,
+                );
+                await manager.update(Product, productId, {
+                    stockQuantity: totalStock,
+                });
+
+                await manager.save(
+                    manager.create(StockAdjustmentLog, {
+                        productId,
+                        variationId,
+                        adjustedById: null,
+                        previousQty,
+                        newQty,
+                        reason: 'WC Stock Sync',
+                        note: `WC delta: ${delta > 0 ? '+' : ''}${delta} (WC stock: ${incomingWcStock})`,
+                    }),
+                );
+
+                this.logger.log(
+                    `Applied WC stock delta to variation ${variationId}: ${previousQty} -> ${newQty} (delta: ${delta})`,
+                );
+            } else {
+                const product = await manager.findOne(Product, {
+                    where: { id: productId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                if (!product) return;
+
+                if (product.wcStockQuantity === null) {
+                    product.wcStockQuantity = incomingWcStock;
+                    await manager.save(Product, product);
+                    this.logger.log(
+                        `Initialized wcStockQuantity for product ${productId} = ${incomingWcStock}`,
+                    );
+                    return;
+                }
+
+                const delta = incomingWcStock - product.wcStockQuantity;
+                product.wcStockQuantity = incomingWcStock;
+
+                if (delta === 0) {
+                    await manager.save(Product, product);
+                    return;
+                }
+
+                const previousQty = product.stockQuantity;
+                let newQty = previousQty + delta;
+
+                if (newQty < 0) {
+                    this.logger.warn(
+                        `WC delta sync would make product ${productId} stock negative (current: ${previousQty}, delta: ${delta}). Clamping to 0.`,
+                    );
+                    newQty = 0;
+                }
+
+                product.stockQuantity = newQty;
+                await manager.save(Product, product);
+
+                await manager.save(
+                    manager.create(StockAdjustmentLog, {
+                        productId,
+                        variationId: null,
+                        adjustedById: null,
+                        previousQty,
+                        newQty,
+                        reason: 'WC Stock Sync',
+                        note: `WC delta: ${delta > 0 ? '+' : ''}${delta} (WC stock: ${incomingWcStock})`,
+                    }),
+                );
+
+                this.logger.log(
+                    `Applied WC stock delta to product ${productId}: ${previousQty} -> ${newQty} (delta: ${delta})`,
+                );
+            }
+        });
     }
 
     private async upsertProduct(
@@ -1116,8 +1256,15 @@ export class WooCommerceService {
         let result: 'created' | 'updated';
 
         if (existing) {
-            // Update content only, do NOT overwrite stock
+            // Update content (NOT stock — stock is handled via delta sync below)
             await this.productRepository.update(existing.id, productData);
+
+            // Delta stock sync for SIMPLE products only (variable products get stock from variations)
+            if (!isVariable) {
+                const incomingWcStock = wcProduct.stock_quantity ?? 0;
+                await this.applyDeltaStockSync(existing.id, null, incomingWcStock);
+            }
+
             existing = (await this.productRepository.findOne({
                 where: { id: existing.id },
             }))!;
@@ -1127,6 +1274,7 @@ export class WooCommerceService {
             const newProduct = this.productRepository.create({
                 ...productData,
                 stockQuantity: wcProduct.stock_quantity || 0,
+                wcStockQuantity: wcProduct.stock_quantity || 0,
             });
             existing = await this.productRepository.save(newProduct);
             result = 'created';
@@ -1209,15 +1357,24 @@ export class WooCommerceService {
                     };
 
                     if (existingVar) {
-                        // Update content, NOT stock
+                        // Update content (NOT stock — stock is handled via delta sync below)
                         await this.variationRepository.update(
                             existingVar.id,
                             varData,
+                        );
+
+                        // Delta stock sync for this variation
+                        const incomingVarWcStock = wcVar.stock_quantity ?? 0;
+                        await this.applyDeltaStockSync(
+                            existing.id,
+                            existingVar.id,
+                            incomingVarWcStock,
                         );
                     } else {
                         const newVar = this.variationRepository.create({
                             ...varData,
                             stockQuantity: wcVar.stock_quantity || 0,
+                            wcStockQuantity: wcVar.stock_quantity || 0,
                         });
                         await this.variationRepository.save(newVar);
                     }
@@ -1495,7 +1652,7 @@ export class WooCommerceService {
                             invoice: order.invoiceId,
                             recipient_name: order.customerName,
                             recipient_phone: order.customerPhone,
-                            recipient_address: order.customerAddress,
+                            recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
                             cod_amount: Number(order.grandTotal),
                         });
 

@@ -397,6 +397,8 @@ export class OrderService {
                     customerName: dto.customerName,
                     customerPhone: dto.customerPhone,
                     customerAddress: dto.customerAddress,
+                    district: dto.district ?? null,
+                    upazila: dto.upazila ?? null,
                     shippingZone: dto.shippingZone,
                     shippingPartner: dto.shippingPartner,
                     shippingFee,
@@ -618,6 +620,8 @@ export class OrderService {
                     customerName: dto.customerName,
                     customerPhone: dto.customerPhone,
                     customerAddress: dto.customerAddress,
+                    district: dto.district ?? null,
+                    upazila: dto.upazila ?? null,
                     shippingZone: dto.shippingZone,
                     shippingPartner: dto.shippingPartner,
                     shippingFee,
@@ -663,7 +667,7 @@ export class OrderService {
                                 invoice: order.invoiceId,
                                 recipient_name: order.customerName,
                                 recipient_phone: order.customerPhone,
-                                recipient_address: order.customerAddress,
+                                recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
                                 cod_amount:
                                     Number(order.grandTotal) -
                                     Number(order.advanceAmount),
@@ -746,6 +750,15 @@ export class OrderService {
         }
         if (dto.customerAddress !== undefined) {
             updateData.customerAddress = dto.customerAddress;
+        }
+        if (dto.district !== undefined) {
+            updateData.district = dto.district;
+        }
+        if (dto.upazila !== undefined) {
+            updateData.upazila = dto.upazila;
+        }
+        if (dto.shippingPartner !== undefined) {
+            updateData.shippingPartner = dto.shippingPartner;
         }
 
         if (dto.discountAmount !== undefined) {
@@ -968,7 +981,7 @@ export class OrderService {
                 invoice: order.invoiceId,
                 recipient_name: order.customerName,
                 recipient_phone: order.customerPhone,
-                recipient_address: order.customerAddress,
+                recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
                 cod_amount:
                     Number(order.grandTotal) - Number(order.advanceAmount),
             });
@@ -1110,7 +1123,7 @@ export class OrderService {
             invoice: order.invoiceId,
             recipient_name: order.customerName,
             recipient_phone: order.customerPhone,
-            recipient_address: order.customerAddress,
+            recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
             cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
         }));
 
@@ -1376,6 +1389,8 @@ export class OrderService {
         total: number;
         names: string[];
         addresses: string[];
+        districts: string[];
+        upazilas: string[];
     }> {
         const normalized = normalizeBDPhone(phone);
         const phoneWhereClause = `REPLACE(REPLACE(order.customer_phone, '+880', ''), '880', '') = :normalized`;
@@ -1400,9 +1415,13 @@ export class OrderService {
                 .createQueryBuilder('order')
                 .select('order.customer_name', 'name')
                 .addSelect('order.customer_address', 'address')
+                .addSelect('order.district', 'district')
+                .addSelect('order.upazila', 'upazila')
                 .where(phoneWhereClause, { normalized })
                 .groupBy('order.customer_name')
                 .addGroupBy('order.customer_address')
+                .addGroupBy('order.district')
+                .addGroupBy('order.upazila')
                 .getRawMany(),
         ]);
 
@@ -1412,6 +1431,20 @@ export class OrderService {
         const addresses = [
             ...new Set(identities.map((r: { address: string }) => r.address)),
         ];
+        const districts = [
+            ...new Set(
+                identities
+                    .map((r: { district: string | null }) => r.district)
+                    .filter(Boolean),
+            ),
+        ] as string[];
+        const upazilas = [
+            ...new Set(
+                identities
+                    .map((r: { upazila: string | null }) => r.upazila)
+                    .filter(Boolean),
+            ),
+        ] as string[];
 
         return {
             completed: parseInt(result?.completed, 10) || 0,
@@ -1420,6 +1453,8 @@ export class OrderService {
             total: parseInt(result?.total, 10) || 0,
             names,
             addresses,
+            districts,
+            upazilas,
         };
     }
 

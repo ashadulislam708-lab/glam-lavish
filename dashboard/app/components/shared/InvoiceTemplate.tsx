@@ -102,7 +102,7 @@ export default function InvoiceTemplate({
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", gap: "3px", fontSize: "8px" }}>
           <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "1px" }}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-          {invoice.customerAddress}
+          {[invoice.customerAddress, invoice.upazila, invoice.district].filter(Boolean).join(', ')}
         </div>
       </div>
 

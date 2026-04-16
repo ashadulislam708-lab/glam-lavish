@@ -7,6 +7,7 @@ import {
     Min,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ShippingPartnerEnum } from '../../../shared/enums/shipping-partner.enum.js';
 import { ShippingZoneEnum } from '../../../shared/enums/shipping-zone.enum.js';
 
 /**
@@ -34,6 +35,16 @@ export class UpdateOrderDto {
     @IsNotEmpty()
     customerAddress?: string;
 
+    @ApiPropertyOptional({ description: 'Bangladesh district name' })
+    @IsOptional()
+    @IsString()
+    district?: string;
+
+    @ApiPropertyOptional({ description: 'Upazila/Thana name within the district' })
+    @IsOptional()
+    @IsString()
+    upazila?: string;
+
     @ApiPropertyOptional({
         description: 'Shipping zone -- recalculates shippingFee and grandTotal',
         enum: ShippingZoneEnum,
@@ -57,4 +68,12 @@ export class UpdateOrderDto {
     @IsNumber()
     @Min(0)
     advanceAmount?: number;
+
+    @ApiPropertyOptional({
+        description: 'Shipping partner',
+        enum: ShippingPartnerEnum,
+    })
+    @IsOptional()
+    @IsEnum(ShippingPartnerEnum)
+    shippingPartner?: ShippingPartnerEnum;
 }

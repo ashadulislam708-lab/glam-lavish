@@ -61,6 +61,16 @@ export class CreateOrderDto {
     @IsNotEmpty()
     customerAddress: string;
 
+    @ApiPropertyOptional({ description: 'Bangladesh district name' })
+    @IsOptional()
+    @IsString()
+    district?: string;
+
+    @ApiPropertyOptional({ description: 'Upazila/Thana name within the district' })
+    @IsOptional()
+    @IsString()
+    upazila?: string;
+
     @ApiProperty({
         description: 'Shipping zone',
         enum: ShippingZoneEnum,

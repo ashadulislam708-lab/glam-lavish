@@ -19,6 +19,8 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district: string | null;
+  upazila: string | null;
   shippingZone: ShippingZoneEnum;
   shippingPartner: ShippingPartnerEnum;
   shippingFee: number;
@@ -48,6 +50,8 @@ export interface CreateOrderRequest {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district?: string;
+  upazila?: string;
   shippingZone: ShippingZoneEnum;
   shippingPartner: ShippingPartnerEnum;
   discountAmount?: number;
@@ -87,6 +91,8 @@ export interface InvoiceData {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district: string | null;
+  upazila: string | null;
   items: {
     name: string;
     variation: string | null;
@@ -109,6 +115,8 @@ export interface CustomerOrderHistory {
   total: number;
   names: string[];
   addresses: string[];
+  districts: string[];
+  upazilas: string[];
 }
 
 export interface OrderNote {
