@@ -5,10 +5,10 @@ export class AddWcStockQuantity1776600000000 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `ALTER TABLE "products" ADD COLUMN "wc_stock_quantity" integer DEFAULT NULL`,
+            `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "wc_stock_quantity" integer DEFAULT NULL`,
         );
         await queryRunner.query(
-            `ALTER TABLE "product_variations" ADD COLUMN "wc_stock_quantity" integer DEFAULT NULL`,
+            `ALTER TABLE "product_variations" ADD COLUMN IF NOT EXISTS "wc_stock_quantity" integer DEFAULT NULL`,
         );
     }
 

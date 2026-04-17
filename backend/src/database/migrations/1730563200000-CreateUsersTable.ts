@@ -78,17 +78,17 @@ export class CreateUsersTable1730563200000 implements MigrationInterface {
 
         // Create index on email for faster lookups
         await queryRunner.query(
-            `CREATE INDEX "IDX_users_email" ON "users" ("email")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_users_email" ON "users" ("email")`,
         );
 
         // Create index on role for filtering
         await queryRunner.query(
-            `CREATE INDEX "IDX_users_role" ON "users" ("role")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_users_role" ON "users" ("role")`,
         );
 
         // Create index on is_active for filtering
         await queryRunner.query(
-            `CREATE INDEX "IDX_users_is_active" ON "users" ("is_active")`,
+            `CREATE INDEX IF NOT EXISTS "IDX_users_is_active" ON "users" ("is_active")`,
         );
     }
 

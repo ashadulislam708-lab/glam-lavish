@@ -24,31 +24,31 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         // ENUM TYPES
         // ========================
         await queryRunner.query(
-            `CREATE TYPE "public"."product_type_enum" AS ENUM('SIMPLE', 'VARIABLE')`,
+            `CREATE TYPE IF NOT EXISTS "public"."product_type_enum" AS ENUM('SIMPLE', 'VARIABLE')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."sync_status_enum" AS ENUM('SYNCED', 'PENDING', 'ERROR')`,
+            `CREATE TYPE IF NOT EXISTS "public"."sync_status_enum" AS ENUM('SYNCED', 'PENDING', 'ERROR')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."order_status_enum" AS ENUM('PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED')`,
+            `CREATE TYPE IF NOT EXISTS "public"."order_status_enum" AS ENUM('PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'RETURNED')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."order_source_enum" AS ENUM('MANUAL', 'WOOCOMMERCE')`,
+            `CREATE TYPE IF NOT EXISTS "public"."order_source_enum" AS ENUM('MANUAL', 'WOOCOMMERCE')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."shipping_zone_enum" AS ENUM('INSIDE_DHAKA', 'DHAKA_SUB_AREA', 'OUTSIDE_DHAKA')`,
+            `CREATE TYPE IF NOT EXISTS "public"."shipping_zone_enum" AS ENUM('INSIDE_DHAKA', 'DHAKA_SUB_AREA', 'OUTSIDE_DHAKA')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."shipping_partner_enum" AS ENUM('STEADFAST', 'PATHAO')`,
+            `CREATE TYPE IF NOT EXISTS "public"."shipping_partner_enum" AS ENUM('STEADFAST', 'PATHAO')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."sync_direction_enum" AS ENUM('INBOUND', 'OUTBOUND')`,
+            `CREATE TYPE IF NOT EXISTS "public"."sync_direction_enum" AS ENUM('INBOUND', 'OUTBOUND')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."sync_log_status_enum" AS ENUM('SUCCESS', 'FAILED', 'SKIPPED')`,
+            `CREATE TYPE IF NOT EXISTS "public"."sync_log_status_enum" AS ENUM('SUCCESS', 'FAILED', 'SKIPPED')`,
         );
         await queryRunner.query(
-            `CREATE TYPE "public"."user_role_enum" AS ENUM('ADMIN', 'STAFF')`,
+            `CREATE TYPE IF NOT EXISTS "public"."user_role_enum" AS ENUM('ADMIN', 'STAFF')`,
         );
 
         // ========================
@@ -250,7 +250,8 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         // ========================
         // PRODUCT VARIATIONS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('product_variations'))) {
+            await queryRunner.query(`
       CREATE TABLE "product_variations" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "product_id" uuid NOT NULL,
@@ -269,17 +270,19 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "FK_product_variations_product" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE CASCADE
       )
     `);
-        await queryRunner.query(
-            `CREATE INDEX "IDX_product_variations_wc_id" ON "product_variations" ("wc_id")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_product_variations_product_id" ON "product_variations" ("product_id")`,
-        );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_product_variations_wc_id" ON "product_variations" ("wc_id")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_product_variations_product_id" ON "product_variations" ("product_id")`,
+            );
+        }
 
         // ========================
         // ORDERS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('orders'))) {
+            await queryRunner.query(`
       CREATE TABLE "orders" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "invoice_id" character varying(20) NOT NULL,
@@ -306,29 +309,31 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "FK_orders_created_by" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE SET NULL
       )
     `);
-        await queryRunner.query(
-            `CREATE UNIQUE INDEX "IDX_orders_wc_order_id" ON "orders" ("wc_order_id") WHERE "wc_order_id" IS NOT NULL`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_orders_invoice_id" ON "orders" ("invoice_id")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_orders_status" ON "orders" ("status")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_orders_source" ON "orders" ("source")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_orders_created_at" ON "orders" ("created_at")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_orders_courier_consignment_id" ON "orders" ("courier_consignment_id")`,
-        );
+            await queryRunner.query(
+                `CREATE UNIQUE INDEX "IDX_orders_wc_order_id" ON "orders" ("wc_order_id") WHERE "wc_order_id" IS NOT NULL`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_orders_invoice_id" ON "orders" ("invoice_id")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_orders_status" ON "orders" ("status")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_orders_source" ON "orders" ("source")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_orders_created_at" ON "orders" ("created_at")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_orders_courier_consignment_id" ON "orders" ("courier_consignment_id")`,
+            );
+        }
 
         // ========================
         // ORDER ITEMS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('order_items'))) {
+            await queryRunner.query(`
       CREATE TABLE "order_items" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "order_id" uuid NOT NULL,
@@ -346,14 +351,16 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "FK_order_items_variation" FOREIGN KEY ("variation_id") REFERENCES "product_variations"("id") ON DELETE SET NULL
       )
     `);
-        await queryRunner.query(
-            `CREATE INDEX "IDX_order_items_order_id" ON "order_items" ("order_id")`,
-        );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_order_items_order_id" ON "order_items" ("order_id")`,
+            );
+        }
 
         // ========================
         // STOCK ADJUSTMENT LOGS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('stock_adjustment_logs'))) {
+            await queryRunner.query(`
       CREATE TABLE "stock_adjustment_logs" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "product_id" uuid NOT NULL,
@@ -369,14 +376,16 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "FK_stock_adjustment_logs_user" FOREIGN KEY ("adjusted_by_id") REFERENCES "users"("id") ON DELETE SET NULL
       )
     `);
-        await queryRunner.query(
-            `CREATE INDEX "IDX_stock_adjustment_logs_product_created" ON "stock_adjustment_logs" ("product_id", "created_at")`,
-        );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_stock_adjustment_logs_product_created" ON "stock_adjustment_logs" ("product_id", "created_at")`,
+            );
+        }
 
         // ========================
         // SYNC LOGS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('sync_logs'))) {
+            await queryRunner.query(`
       CREATE TABLE "sync_logs" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "direction" "public"."sync_direction_enum" NOT NULL,
@@ -389,20 +398,22 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "PK_sync_logs" PRIMARY KEY ("id")
       )
     `);
-        await queryRunner.query(
-            `CREATE INDEX "IDX_sync_logs_entity_type_entity_id" ON "sync_logs" ("entity_type", "entity_id")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_sync_logs_status" ON "sync_logs" ("status")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_sync_logs_created_at" ON "sync_logs" ("created_at")`,
-        );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_sync_logs_entity_type_entity_id" ON "sync_logs" ("entity_type", "entity_id")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_sync_logs_status" ON "sync_logs" ("status")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_sync_logs_created_at" ON "sync_logs" ("created_at")`,
+            );
+        }
 
         // ========================
         // INVOICE COUNTER TABLE (SINGLETON)
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('invoice_counter'))) {
+            await queryRunner.query(`
       CREATE TABLE "invoice_counter" (
         "id" integer NOT NULL DEFAULT 1,
         "last_num" integer NOT NULL DEFAULT 0,
@@ -411,15 +422,17 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "CK_invoice_counter_singleton" CHECK ("id" = 1)
       )
     `);
-        // Insert the singleton row
-        await queryRunner.query(
-            `INSERT INTO "invoice_counter" ("id", "last_num") VALUES (1, 0)`,
-        );
+            // Insert the singleton row
+            await queryRunner.query(
+                `INSERT INTO "invoice_counter" ("id", "last_num") VALUES (1, 0) ON CONFLICT DO NOTHING`,
+            );
+        }
 
         // ========================
         // REFRESH TOKENS TABLE
         // ========================
-        await queryRunner.query(`
+        if (!(await queryRunner.hasTable('refresh_tokens'))) {
+            await queryRunner.query(`
       CREATE TABLE "refresh_tokens" (
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "user_id" uuid NOT NULL,
@@ -431,12 +444,13 @@ export class GlamLavishSchema1762700000000 implements MigrationInterface {
         CONSTRAINT "FK_refresh_tokens_user" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE
       )
     `);
-        await queryRunner.query(
-            `CREATE INDEX "IDX_refresh_tokens_user_id" ON "refresh_tokens" ("user_id")`,
-        );
-        await queryRunner.query(
-            `CREATE INDEX "IDX_refresh_tokens_token" ON "refresh_tokens" ("token")`,
-        );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_refresh_tokens_user_id" ON "refresh_tokens" ("user_id")`,
+            );
+            await queryRunner.query(
+                `CREATE INDEX "IDX_refresh_tokens_token" ON "refresh_tokens" ("token")`,
+            );
+        }
 
         // ========================
         // CLEANUP OLD ENUM TYPES (from starter kit)

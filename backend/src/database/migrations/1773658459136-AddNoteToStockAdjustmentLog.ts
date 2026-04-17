@@ -7,7 +7,7 @@ export class AddNoteToStockAdjustmentLog1773658459136
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `ALTER TABLE "stock_adjustment_logs" ADD "note" character varying(500)`,
+            `ALTER TABLE "stock_adjustment_logs" ADD COLUMN IF NOT EXISTS "note" character varying(500)`,
         );
     }
 

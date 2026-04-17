@@ -7,7 +7,7 @@ export class AddStockDecrementedToOrderItems1773747113000
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `ALTER TABLE "order_items" ADD "stock_decremented" boolean NOT NULL DEFAULT true`,
+            `ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "stock_decremented" boolean NOT NULL DEFAULT true`,
         );
     }
 

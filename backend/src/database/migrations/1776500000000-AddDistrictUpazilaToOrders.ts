@@ -7,10 +7,10 @@ export class AddDistrictUpazilaToOrders1776500000000
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
-            `ALTER TABLE "orders" ADD COLUMN "district" VARCHAR(100) NULL`,
+            `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "district" VARCHAR(100) NULL`,
         );
         await queryRunner.query(
-            `ALTER TABLE "orders" ADD COLUMN "upazila" VARCHAR(100) NULL`,
+            `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "upazila" VARCHAR(100) NULL`,
         );
     }
 
