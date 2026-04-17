@@ -30,13 +30,7 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 import { Separator } from "~/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { formatBDT } from "~/utils/formatting";
 import { getShippingFee, SHIPPING_PARTNER_OPTIONS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
 import { DISTRICT_NAMES, getUpazilasForDistrict, getZoneForDistrict } from "~/constants/bangladesh-locations";
@@ -168,6 +162,10 @@ export default function CreateOrderPage() {
     }
     if (customerHistory.addresses.length === 1 && !form.getValues("customerAddress")) {
       form.setValue("customerAddress", customerHistory.addresses[0]);
+    }
+    if (customerHistory.districts.length === 1 && !form.getValues("district")) {
+      form.setValue("district", customerHistory.districts[0]);
+      // shippingZone auto-updates via the selectedDistrict watcher effect
     }
   }, [customerHistory, form]);
 
@@ -935,6 +933,70 @@ export default function CreateOrderPage() {
                                 </div>
                               </div>
                             )}
+                            {customerHistory.districts.length >= 1 && (
+                              <div className="pt-2 border-t">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {customerHistory.districts.length > 1
+                                      ? `${customerHistory.districts.length} previous districts`
+                                      : "Previous district"}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground/70">Click to select</p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {customerHistory.districts.map((district) => {
+                                    const isSelected = form.watch("district") === district;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={district}
+                                        onClick={() => form.setValue("district", district)}
+                                        className={`inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                                          isSelected
+                                            ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium"
+                                            : "bg-background border-input hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="h-3 w-3" />}
+                                        {district}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {customerHistory.upazilas.length >= 1 && (
+                              <div className="pt-2 border-t">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {customerHistory.upazilas.length > 1
+                                      ? `${customerHistory.upazilas.length} previous upazilas`
+                                      : "Previous upazila"}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground/70">Click to select</p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {customerHistory.upazilas.map((upazila) => {
+                                    const isSelected = form.watch("upazila") === upazila;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={upazila}
+                                        onClick={() => form.setValue("upazila", upazila)}
+                                        className={`inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                                          isSelected
+                                            ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium"
+                                            : "bg-background border-input hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="h-3 w-3" />}
+                                        {upazila}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </FormItem>
@@ -973,23 +1035,14 @@ export default function CreateOrderPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>District</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select district" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {DISTRICT_NAMES.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={DISTRICT_NAMES}
+                              placeholder="Select district"
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1000,24 +1053,15 @@ export default function CreateOrderPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Upazila</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            disabled={!selectedDistrict}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={selectedDistrict ? "Select upazila" : "Select district first"} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {getUpazilasForDistrict(selectedDistrict).map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={getUpazilasForDistrict(selectedDistrict)}
+                              placeholder={selectedDistrict ? "Select upazila" : "Select district first"}
+                              disabled={!selectedDistrict}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

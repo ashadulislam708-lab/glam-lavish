@@ -2,7 +2,6 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
-import * as crypto from 'crypto';
 import { Product } from '../../products/entities/product.entity.js';
 import { ProductVariation } from '../../products/entities/product-variation.entity.js';
 import { Category } from '../../categories/entities/category.entity.js';
@@ -89,24 +88,6 @@ export class WooCommerceService {
             });
         }
         return this.wcClient;
-    }
-
-    /**
-     * Verify WooCommerce webhook signature
-     */
-    verifyWebhookSignature(payload: string, signature: string): boolean {
-        const config = envConfigService.getWooCommerceConfig();
-        if (!config.WC_WEBHOOK_SECRET) {
-            this.logger.warn('WC_WEBHOOK_SECRET not configured');
-            return false;
-        }
-
-        const computed = crypto
-            .createHmac('sha256', config.WC_WEBHOOK_SECRET)
-            .update(payload, 'utf8')
-            .digest('base64');
-
-        return computed === signature;
     }
 
     /**
@@ -493,6 +474,7 @@ export class WooCommerceService {
         let page = 1;
         const perPage = 100;
         let synced = 0;
+        let skipped = 0;
         let errors = 0;
         const errorDetails: Array<{ wcOrderId: number; error: string }> = [];
 
@@ -516,8 +498,10 @@ export class WooCommerceService {
                         });
                         if (!existing) {
                             await this.createOrderFromWc(wcOrder);
+                            synced++;
+                        } else {
+                            skipped++;
                         }
-                        synced++;
                     } catch (error: any) {
                         errors++;
                         errorDetails.push({
@@ -537,7 +521,7 @@ export class WooCommerceService {
             this.logger.error(`Order sync failed: ${error.message}`);
         }
 
-        return { synced, errors, errorDetails };
+        return { synced, skipped, errors, errorDetails };
     }
 
     /**
@@ -952,7 +936,8 @@ export class WooCommerceService {
                                     variation.id,
                                     {
                                         wcLastSyncedAt: new Date(),
-                                        wcStockQuantity: variation.stockQuantity,
+                                        wcStockQuantity:
+                                            variation.stockQuantity,
                                     },
                                 );
                             } catch (varError: any) {
@@ -1229,7 +1214,17 @@ export class WooCommerceService {
 
         let existing = await this.productRepository.findOne({
             where: { wcId },
+            withDeleted: true,
         });
+
+        // Restore soft-deleted product when WC sends an active product webhook
+        if (existing?.deletedAt) {
+            await this.productRepository.restore(existing.id);
+            existing.deletedAt = null;
+            this.logger.log(
+                `Restored soft-deleted product wcId ${wcId} (id: ${existing.id})`,
+            );
+        }
 
         const productData: Partial<Product> = {
             name: wcProduct.name,
@@ -1262,7 +1257,11 @@ export class WooCommerceService {
             // Delta stock sync for SIMPLE products only (variable products get stock from variations)
             if (!isVariable) {
                 const incomingWcStock = wcProduct.stock_quantity ?? 0;
-                await this.applyDeltaStockSync(existing.id, null, incomingWcStock);
+                await this.applyDeltaStockSync(
+                    existing.id,
+                    null,
+                    incomingWcStock,
+                );
             }
 
             existing = (await this.productRepository.findOne({
@@ -1652,7 +1651,13 @@ export class WooCommerceService {
                             invoice: order.invoiceId,
                             recipient_name: order.customerName,
                             recipient_phone: order.customerPhone,
-                            recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
+                            recipient_address: [
+                                order.customerAddress,
+                                order.upazila,
+                                order.district,
+                            ]
+                                .filter(Boolean)
+                                .join(', '),
                             cod_amount: Number(order.grandTotal),
                         });
 

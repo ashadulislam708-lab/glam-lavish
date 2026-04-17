@@ -127,6 +127,20 @@ export const BANGLADESH_DISTRICTS: BangladeshDistrict[] = [
   {
     name: "Dhaka",
     upazilas: [
+      // Inside Dhaka — DSCC (South)
+      "Adabor", "Bangshal", "Chak Bazar", "Demra", "Dhanmondi",
+      "Gendaria", "Hazaribagh", "Jatrabari", "Kadamtali", "Kalabagan",
+      "Kamrangirchar", "Khilgaon", "Kotwali", "Lalbagh", "Motijheel",
+      "Mugda", "New Market", "Paltan", "Ramna", "Sabujbagh",
+      "Shahbag", "Shahjahanpur", "Shyampur", "Sutrapur", "Wari",
+      // Inside Dhaka — DNCC (North)
+      "Badda", "Banani", "Bhashantek", "Bimanbandar", "Cantonment",
+      "Dakshinkhan", "Darussalam", "Gulshan", "Hatirjheel", "Kafrul",
+      "Khilkhet", "Mirpur", "Mohammadpur", "Pallabi", "Rampura",
+      "Rupnagar", "Shah Ali", "Sher-e-Bangla Nagar", "Tejgaon",
+      "Tejgaon Industrial Area", "Turag", "Uttara East", "Uttara West",
+      "Uttarkhan", "Vatara",
+      // Dhaka Sub-Area upazilas
       "Dhamrai", "Dohar", "Keraniganj", "Nawabganj", "Savar",
     ],
   },

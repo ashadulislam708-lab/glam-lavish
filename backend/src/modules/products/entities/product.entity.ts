@@ -64,7 +64,12 @@ export class Product {
     @Column({ name: 'stock_quantity', type: 'int', default: 0 })
     stockQuantity: number;
 
-    @Column({ name: 'wc_stock_quantity', type: 'int', nullable: true, default: null })
+    @Column({
+        name: 'wc_stock_quantity',
+        type: 'int',
+        nullable: true,
+        default: null,
+    })
     wcStockQuantity: number | null;
 
     @Column({ name: 'low_stock_threshold', type: 'int', default: 5 })

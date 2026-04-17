@@ -15,11 +15,7 @@ export class AddDistrictUpazilaToOrders1776500000000
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(
-            `ALTER TABLE "orders" DROP COLUMN "upazila"`,
-        );
-        await queryRunner.query(
-            `ALTER TABLE "orders" DROP COLUMN "district"`,
-        );
+        await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "upazila"`);
+        await queryRunner.query(`ALTER TABLE "orders" DROP COLUMN "district"`);
     }
 }

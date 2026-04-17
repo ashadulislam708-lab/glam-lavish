@@ -66,7 +66,9 @@ export class CreateOrderDto {
     @IsString()
     district?: string;
 
-    @ApiPropertyOptional({ description: 'Upazila/Thana name within the district' })
+    @ApiPropertyOptional({
+        description: 'Upazila/Thana name within the district',
+    })
     @IsOptional()
     @IsString()
     upazila?: string;

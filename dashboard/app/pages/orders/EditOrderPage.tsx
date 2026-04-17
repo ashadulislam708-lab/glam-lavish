@@ -33,13 +33,7 @@ import {
 } from "~/components/ui/form";
 import { Separator } from "~/components/ui/separator";
 import LoadingSpinner from "~/components/atoms/LoadingSpinner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { formatBDT, formatDateTime } from "~/utils/formatting";
 import { getShippingFee, SHIPPING_PARTNER_OPTIONS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
 import { DISTRICT_NAMES, getUpazilasForDistrict, getZoneForDistrict } from "~/constants/bangladesh-locations";
@@ -371,23 +365,14 @@ export default function EditOrderPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>District</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select district" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {DISTRICT_NAMES.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={DISTRICT_NAMES}
+                              placeholder="Select district"
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -398,24 +383,15 @@ export default function EditOrderPage() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Upazila</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            disabled={!selectedDistrict}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={selectedDistrict ? "Select upazila" : "Select district first"} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {getUpazilasForDistrict(selectedDistrict).map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={getUpazilasForDistrict(selectedDistrict)}
+                              placeholder={selectedDistrict ? "Select upazila" : "Select district first"}
+                              disabled={!selectedDistrict}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

@@ -12,7 +12,8 @@ export class AddCarrybeeRedxToShippingPartner1776314729492
         );
     }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    public async down(_queryRunner: QueryRunner): Promise<void> {
         // PostgreSQL does not support removing individual enum values.
         // To roll back, you would need to recreate the type and update all
         // referencing columns — perform this manually if needed.

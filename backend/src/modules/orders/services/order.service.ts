@@ -667,7 +667,13 @@ export class OrderService {
                                 invoice: order.invoiceId,
                                 recipient_name: order.customerName,
                                 recipient_phone: order.customerPhone,
-                                recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
+                                recipient_address: [
+                                    order.customerAddress,
+                                    order.upazila,
+                                    order.district,
+                                ]
+                                    .filter(Boolean)
+                                    .join(', '),
                                 cod_amount:
                                     Number(order.grandTotal) -
                                     Number(order.advanceAmount),
@@ -981,7 +987,13 @@ export class OrderService {
                 invoice: order.invoiceId,
                 recipient_name: order.customerName,
                 recipient_phone: order.customerPhone,
-                recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
+                recipient_address: [
+                    order.customerAddress,
+                    order.upazila,
+                    order.district,
+                ]
+                    .filter(Boolean)
+                    .join(', '),
                 cod_amount:
                     Number(order.grandTotal) - Number(order.advanceAmount),
             });
@@ -1123,7 +1135,13 @@ export class OrderService {
             invoice: order.invoiceId,
             recipient_name: order.customerName,
             recipient_phone: order.customerPhone,
-            recipient_address: [order.customerAddress, order.upazila, order.district].filter(Boolean).join(', '),
+            recipient_address: [
+                order.customerAddress,
+                order.upazila,
+                order.district,
+            ]
+                .filter(Boolean)
+                .join(', '),
             cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
         }));
 
