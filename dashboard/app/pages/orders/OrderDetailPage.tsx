@@ -7,6 +7,7 @@ import { clearCurrentOrder } from "~/redux/features/orderSlice";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import {
   Select,
@@ -35,10 +36,10 @@ import {
 import LoadingSpinner from "~/components/atoms/LoadingSpinner";
 import { formatBDT, formatDateTime } from "~/utils/formatting";
 import { getOrderStatusColor, getOrderSourceColor } from "~/utils/badges";
-import { SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { SHIPPING_PARTNER_LABELS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
 import { ALLOWED_TRANSITIONS } from "~/constants/orderTransitions";
 import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
-import { OrderStatusEnum } from "~/enums";
+import { OrderStatusEnum, OrderSourceEnum, ShippingPartnerEnum } from "~/enums";
 import {
   ArrowLeft,
   Loader2,
@@ -52,7 +53,7 @@ import {
   User,
   Phone,
   MapPin,
-  ExternalLink,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "~/lib/utils";
@@ -76,6 +77,20 @@ export default function OrderDetailPage() {
     status: string;
   }>({ open: false, status: "" });
 
+  // Inline discount/advance editing state
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [isSavingAmounts, setIsSavingAmounts] = useState(false);
+
+  // Courier edit state
+  const [isCourierEditOpen, setIsCourierEditOpen] = useState(false);
+  const [courierForm, setCourierForm] = useState({
+    courierConsignmentId: "",
+    courierTrackingCode: "",
+    courierTrackingUrl: "",
+  });
+  const [isSavingCourier, setIsSavingCourier] = useState(false);
+
   // Notes state
   const [notes, setNotes] = useState<OrderNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
@@ -96,6 +111,44 @@ export default function OrderDetailPage() {
       dispatch(clearCurrentOrder());
     };
   }, [dispatch, id]);
+
+  // Sync discount/advance state when order loads or updates
+  useEffect(() => {
+    if (order) {
+      setDiscountAmount(Number(order.discountAmount) || 0);
+      setAdvanceAmount(Number(order.advanceAmount) || 0);
+    }
+  }, [order]);
+
+  // Derived calculations (same as CreateOrderPage)
+  const subtotal = order ? Number(order.subtotal) : 0;
+  const shippingFee = order ? Number(order.shippingFee) : 0;
+  const calcGrandTotal = subtotal - discountAmount + shippingFee;
+  const calcDueAmount = calcGrandTotal - advanceAmount;
+
+  const hasAmountChanges = order
+    ? discountAmount !== (Number(order.discountAmount) || 0) ||
+      advanceAmount !== (Number(order.advanceAmount) || 0)
+    : false;
+
+  const handleSaveAmounts = useCallback(() => {
+    if (!id || !hasAmountChanges) return;
+    setIsSavingAmounts(true);
+    orderService
+      .updateOrder(id, { discountAmount, advanceAmount })
+      .then(() => {
+        toast.success("Discount & advance updated successfully");
+        dispatch(fetchOrderDetail(id));
+      })
+      .catch((err: unknown) => {
+        toast.error(
+          (err as { message?: string })?.message || "Failed to update amounts"
+        );
+      })
+      .finally(() => {
+        setIsSavingAmounts(false);
+      });
+  }, [id, discountAmount, advanceAmount, hasAmountChanges, dispatch]);
 
   const handleStatusChange = useCallback(
     (newStatus: string) => {
@@ -120,7 +173,12 @@ export default function OrderDetailPage() {
   );
 
   const handleRetryCourier = useCallback(() => {
-    if (!id) return;
+    if (!id || !order) return;
+    if (order.shippingPartner !== ShippingPartnerEnum.STEADFAST) {
+      const partnerLabel = SHIPPING_PARTNER_LABELS[order.shippingPartner] ?? order.shippingPartner;
+      toast.warning(`Auto courier push is not available for ${partnerLabel} yet. Please update courier info manually.`);
+      return;
+    }
     setFormHandle({ isLoading: true, loadingButtonType: "retry" });
     orderService
       .retryCourier(id)
@@ -131,6 +189,59 @@ export default function OrderDetailPage() {
       .catch((err: unknown) => {
         toast.error(
           (err as { message?: string })?.message || "Courier retry failed"
+        );
+      })
+      .finally(() => {
+        setFormHandle({ isLoading: false, loadingButtonType: "" });
+      });
+  }, [id, order, dispatch]);
+
+  const handleOpenCourierEdit = useCallback(() => {
+    if (!order) return;
+    setCourierForm({
+      courierConsignmentId: order.courierConsignmentId ?? "",
+      courierTrackingCode: order.courierTrackingCode ?? "",
+      courierTrackingUrl: order.courierTrackingUrl ?? "",
+    });
+    setIsCourierEditOpen(true);
+  }, [order]);
+
+  const handleSaveCourierInfo = useCallback(() => {
+    if (!id) return;
+    setIsSavingCourier(true);
+    orderService
+      .updateCourierInfo(id, {
+        courierConsignmentId: courierForm.courierConsignmentId,
+        courierTrackingCode: courierForm.courierTrackingCode,
+        courierTrackingUrl: courierForm.courierTrackingUrl,
+      })
+      .then(() => {
+        toast.success("Courier information updated");
+        setIsCourierEditOpen(false);
+        dispatch(fetchOrderDetail(id));
+      })
+      .catch((err: unknown) => {
+        toast.error(
+          (err as { message?: string })?.message || "Failed to update courier info"
+        );
+      })
+      .finally(() => {
+        setIsSavingCourier(false);
+      });
+  }, [id, courierForm, dispatch]);
+
+  const handleSyncOrder = useCallback(() => {
+    if (!id) return;
+    setFormHandle({ isLoading: true, loadingButtonType: "sync" });
+    orderService
+      .syncSelectedOrders([id])
+      .then(() => {
+        toast.success("Order synced with WooCommerce successfully");
+        dispatch(fetchOrderDetail(id));
+      })
+      .catch((err: unknown) => {
+        toast.error(
+          (err as { message?: string })?.message || "Failed to sync order"
         );
       })
       .finally(() => {
@@ -177,6 +288,13 @@ export default function OrderDetailPage() {
   const isEditable =
     order.status === OrderStatusEnum.PENDING_PAYMENT ||
     order.status === OrderStatusEnum.ON_HOLD;
+  const terminalStatuses = [
+    OrderStatusEnum.COMPLETED,
+    OrderStatusEnum.CANCELLED,
+    OrderStatusEnum.REFUNDED,
+    OrderStatusEnum.FAILED,
+  ];
+  const isAmountEditable = !terminalStatuses.includes(order.status as OrderStatusEnum);
   const allowedStatuses = ALLOWED_TRANSITIONS[order.status] ?? [];
 
   return (
@@ -251,6 +369,24 @@ export default function OrderDetailPage() {
                 <RefreshCw className="mr-2 h-4 w-4" />
               )}
               Push to Courier
+            </Button>
+          )}
+          {order.source === OrderSourceEnum.WOOCOMMERCE && (
+            <Button
+              variant="outline"
+              onClick={handleSyncOrder}
+              disabled={
+                formHandle.isLoading &&
+                formHandle.loadingButtonType === "sync"
+              }
+            >
+              {formHandle.isLoading &&
+              formHandle.loadingButtonType === "sync" ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Sync Order
             </Button>
           )}
         </div>
@@ -428,35 +564,107 @@ export default function OrderDetailPage() {
               </TableBody>
             </Table>
             <Separator className="my-3" />
-            <div className="space-y-1 text-sm">
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatBDT(order.subtotal)}</span>
               </div>
-              {Number(order.discountAmount) > 0 && (
+
+              {/* Discount — editable when order is in non-terminal status */}
+              {isAmountEditable ? (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Discount</span>
+                    <div className="relative w-32">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">৳</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={subtotal}
+                        value={discountAmount || ""}
+                        onChange={(e) => setDiscountAmount(Math.min(subtotal, Math.max(0, Number(e.target.value))))}
+                        placeholder="0"
+                        className="h-8 text-sm pl-6 text-right"
+                      />
+                    </div>
+                  </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>After Discount</span>
+                      <span>{formatBDT(subtotal - discountAmount)}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="flex justify-between text-red-600">
                   <span>Discount</span>
                   <span>-{formatBDT(order.discountAmount)}</span>
                 </div>
               )}
+
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span>{formatBDT(order.shippingFee)}</span>
               </div>
+              <Separator />
               <div className="flex justify-between font-bold text-base pt-1">
                 <span>Grand Total (COD)</span>
-                <span>{formatBDT(order.grandTotal)}</span>
+                <span>{formatBDT(isAmountEditable ? calcGrandTotal : order.grandTotal)}</span>
               </div>
-              {Number(order.advanceAmount) > 0 && (
+
+              {/* Advance — editable when order is in non-terminal status */}
+              {isAmountEditable ? (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Advance Payment</span>
+                    <div className="relative w-32">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">৳</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={calcGrandTotal}
+                        value={advanceAmount || ""}
+                        onChange={(e) => setAdvanceAmount(Math.min(calcGrandTotal, Math.max(0, Number(e.target.value))))}
+                        placeholder="0"
+                        className="h-8 text-sm pl-6 text-right"
+                      />
+                    </div>
+                  </div>
+                  {advanceAmount > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>After Advance</span>
+                      <span>{formatBDT(calcDueAmount)}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="flex justify-between text-green-600">
                   <span>Advance Payment</span>
                   <span>-{formatBDT(order.advanceAmount)}</span>
                 </div>
               )}
+
               <div className="flex justify-between font-bold text-base">
                 <span>Due Amount</span>
-                <span>{formatBDT(Number(order.grandTotal) - Number(order.advanceAmount))}</span>
+                <span>{formatBDT(isAmountEditable ? calcDueAmount : Number(order.grandTotal) - Number(order.advanceAmount))}</span>
               </div>
+
+              {/* Save button — only when values changed */}
+              {isAmountEditable && hasAmountChanges && (
+                <Button
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={handleSaveAmounts}
+                  disabled={isSavingAmounts}
+                >
+                  {isSavingAmounts ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Changes
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -482,6 +690,20 @@ export default function OrderDetailPage() {
                 {order.customerPhone}
               </a>
             </div>
+            {order.district && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">District:</span>{" "}
+                <span className="font-medium">{order.district}</span>
+              </div>
+            )}
+            {order.upazila && (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Upazila:</span>{" "}
+                <span className="font-medium">{order.upazila}</span>
+              </div>
+            )}
             <div className="flex items-start gap-2">
               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
               <span className="text-muted-foreground">Address:</span>{" "}
@@ -499,21 +721,34 @@ export default function OrderDetailPage() {
 
         {/* Courier Info */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle>Courier Information</CardTitle>
+            {![
+              OrderStatusEnum.COMPLETED,
+              OrderStatusEnum.CANCELLED,
+              OrderStatusEnum.REFUNDED,
+            ].includes(order.status) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenCourierEdit}
+                className="h-7 px-2 text-muted-foreground hover:text-foreground"
+              >
+                <Edit className="h-3.5 w-3.5 mr-1" />
+                {order.courierConsignmentId ? "Edit" : "Add"}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <div>
               <span className="text-muted-foreground">Partner:</span>{" "}
-              <span className="font-medium">{order.shippingPartner}</span>
+              <span className="font-medium">{SHIPPING_PARTNER_LABELS[order.shippingPartner] ?? order.shippingPartner}</span>
             </div>
             <div>
               <span className="text-muted-foreground">Consignment ID:</span>{" "}
               <span className="font-medium">
                 {order.courierConsignmentId ?? (
-                  <span className="text-red-500">
-                    Not sent - Use Push to Courier
-                  </span>
+                  <span className="text-muted-foreground italic">Not set</span>
                 )}
               </span>
             </div>
@@ -525,21 +760,76 @@ export default function OrderDetailPage() {
                 </span>
               </div>
             )}
-            {order.courierConsignmentId && order.courierTrackingCode && (
-              <div className="pt-2">
-                <a
-                  href={`https://portal.packzy.com/tracking/${order.courierTrackingCode}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-sm text-indigo-600 hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Track on Steadfast
-                </a>
-              </div>
-            )}
           </CardContent>
         </Card>
+
+        {/* Courier Edit Dialog */}
+        <Dialog open={isCourierEditOpen} onOpenChange={setIsCourierEditOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {order.courierConsignmentId
+                  ? "Edit Courier Information"
+                  : "Add Courier Information"}
+              </DialogTitle>
+              <DialogDescription>
+                Manually set the consignment ID, tracking code, and tracking
+                link for this order.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {order.courierConsignmentId && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  Warning: Changing the consignment ID of a Steadfast order will
+                  break automatic delivery status updates.
+                </p>
+              )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Consignment ID</label>
+                <Input
+                  placeholder="e.g. 233569773"
+                  value={courierForm.courierConsignmentId}
+                  onChange={(e) =>
+                    setCourierForm((f) => ({
+                      ...f,
+                      courierConsignmentId: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Tracking Code</label>
+                <Input
+                  placeholder="e.g. SFR260328STC1D1CF0BD"
+                  value={courierForm.courierTrackingCode}
+                  onChange={(e) =>
+                    setCourierForm((f) => ({
+                      ...f,
+                      courierTrackingCode: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsCourierEditOpen(false)}
+                disabled={isSavingCourier}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSaveCourierInfo} disabled={isSavingCourier}>
+                {isSavingCourier ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Order Metadata */}
@@ -648,7 +938,7 @@ export default function OrderDetailPage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-primary">
-                      {note.createdBy}
+                      {note.createdBy?.name || 'System'}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {formatDateTime(note.createdAt)}

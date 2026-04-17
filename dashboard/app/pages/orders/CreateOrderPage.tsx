@@ -30,8 +30,10 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 import { Separator } from "~/components/ui/separator";
+import { SearchableSelect } from "~/components/ui/searchable-select";
 import { formatBDT } from "~/utils/formatting";
-import { getShippingFee, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { getShippingFee, SHIPPING_PARTNER_OPTIONS, SHIPPING_ZONE_LABELS } from "~/utils/shipping";
+import { DISTRICT_NAMES, getUpazilasForDistrict, getZoneForDistrict } from "~/constants/bangladesh-locations";
 import {
   ShippingZoneEnum,
   ShippingPartnerEnum,
@@ -50,6 +52,7 @@ import {
   ChevronRight,
   Loader2,
   Minus,
+  Pencil,
   Plus,
   Trash2,
   Search,
@@ -66,6 +69,7 @@ interface CartItem {
   variationLabel: string;
   imageUrl: string | null;
   unitPrice: number;
+  originalUnitPrice: number;
   quantity: number;
   maxStock: number;
 }
@@ -106,10 +110,21 @@ export default function CreateOrderPage() {
       customerName: "",
       customerPhone: "",
       customerAddress: "",
+      district: "",
+      upazila: "",
       shippingZone: ShippingZoneEnum.INSIDE_DHAKA,
       shippingPartner: ShippingPartnerEnum.STEADFAST,
     },
   });
+
+  // Auto-select shipping zone when district changes
+  const selectedDistrict = form.watch("district");
+  useEffect(() => {
+    if (selectedDistrict) {
+      form.setValue("upazila", "");
+      form.setValue("shippingZone", getZoneForDistrict(selectedDistrict));
+    }
+  }, [selectedDistrict, form]);
 
   // Customer history lookup by phone
   const [customerHistory, setCustomerHistory] = useState<CustomerOrderHistory | null>(null);
@@ -147,6 +162,10 @@ export default function CreateOrderPage() {
     }
     if (customerHistory.addresses.length === 1 && !form.getValues("customerAddress")) {
       form.setValue("customerAddress", customerHistory.addresses[0]);
+    }
+    if (customerHistory.districts.length === 1 && !form.getValues("district")) {
+      form.setValue("district", customerHistory.districts[0]);
+      // shippingZone auto-updates via the selectedDistrict watcher effect
     }
   }, [customerHistory, form]);
 
@@ -244,6 +263,7 @@ export default function CreateOrderPage() {
             variationLabel: "",
             imageUrl: product.imageUrl,
             unitPrice: product.salePrice ?? product.regularPrice,
+            originalUnitPrice: product.salePrice ?? product.regularPrice,
             quantity: 1,
             maxStock: product.stockQuantity,
           },
@@ -281,6 +301,7 @@ export default function CreateOrderPage() {
           variationLabel: attrLabel,
           imageUrl: variation.imageUrl || selectedProduct.imageUrl,
           unitPrice: variation.salePrice ?? variation.regularPrice,
+          originalUnitPrice: variation.salePrice ?? variation.regularPrice,
           quantity: 1,
           maxStock: variation.stockQuantity,
         },
@@ -312,6 +333,17 @@ export default function CreateOrderPage() {
     setCartItems((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const [editingPriceIndex, setEditingPriceIndex] = useState<number | null>(null);
+  const [editingPriceValue, setEditingPriceValue] = useState<string>("");
+
+  const handlePriceChange = useCallback((index: number, value: number) => {
+    setCartItems((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, unitPrice: Math.max(0, value) } : item
+      )
+    );
+  }, []);
+
   const handleCreateOrder = useCallback(
     (data: CreateOrderFormData) => {
       if (cartItems.length === 0) {
@@ -324,6 +356,7 @@ export default function CreateOrderPage() {
         productId: item.productId,
         variationId: item.variationId,
         quantity: item.quantity,
+        unitPrice: item.unitPrice,
       }));
 
       orderService
@@ -723,7 +756,42 @@ export default function CreateOrderPage() {
                             </div>
                           </TableCell>
                           <TableCell className="font-medium">
-                            {formatBDT(item.unitPrice * item.quantity)}
+                            {editingPriceIndex === index ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                autoFocus
+                                value={editingPriceValue}
+                                className="w-28 h-8 text-sm"
+                                onChange={(e) => setEditingPriceValue(e.target.value)}
+                                onBlur={() => {
+                                  const val = parseFloat(editingPriceValue);
+                                  if (!isNaN(val) && val >= 0) handlePriceChange(index, val);
+                                  setEditingPriceIndex(null);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const val = parseFloat(editingPriceValue);
+                                    if (!isNaN(val) && val >= 0) handlePriceChange(index, val);
+                                    setEditingPriceIndex(null);
+                                  }
+                                  if (e.key === "Escape") setEditingPriceIndex(null);
+                                }}
+                              />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingPriceIndex(index);
+                                  setEditingPriceValue(String(item.unitPrice));
+                                }}
+                                className={`flex items-center gap-1.5 rounded px-2 py-1 border border-dashed hover:border-solid hover:bg-muted/50 transition-colors ${item.unitPrice !== item.originalUnitPrice ? "border-amber-400 text-amber-600" : "border-border"}`}
+                                title="Click to edit unit price"
+                              >
+                                <span>{formatBDT(item.unitPrice * item.quantity)}</span>
+                                <Pencil className="h-3 w-3 opacity-50 flex-shrink-0" />
+                              </button>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -865,6 +933,70 @@ export default function CreateOrderPage() {
                                 </div>
                               </div>
                             )}
+                            {customerHistory.districts.length >= 1 && (
+                              <div className="pt-2 border-t">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {customerHistory.districts.length > 1
+                                      ? `${customerHistory.districts.length} previous districts`
+                                      : "Previous district"}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground/70">Click to select</p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {customerHistory.districts.map((district) => {
+                                    const isSelected = form.watch("district") === district;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={district}
+                                        onClick={() => form.setValue("district", district)}
+                                        className={`inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                                          isSelected
+                                            ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium"
+                                            : "bg-background border-input hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="h-3 w-3" />}
+                                        {district}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            {customerHistory.upazilas.length >= 1 && (
+                              <div className="pt-2 border-t">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    {customerHistory.upazilas.length > 1
+                                      ? `${customerHistory.upazilas.length} previous upazilas`
+                                      : "Previous upazila"}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground/70">Click to select</p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {customerHistory.upazilas.map((upazila) => {
+                                    const isSelected = form.watch("upazila") === upazila;
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={upazila}
+                                        onClick={() => form.setValue("upazila", upazila)}
+                                        className={`inline-flex items-center gap-1 text-xs rounded-md px-2.5 py-1 border transition-colors ${
+                                          isSelected
+                                            ? "bg-indigo-50 border-indigo-300 text-indigo-700 font-medium"
+                                            : "bg-background border-input hover:bg-indigo-50 hover:border-indigo-300 cursor-pointer"
+                                        }`}
+                                      >
+                                        {isSelected && <Check className="h-3 w-3" />}
+                                        {upazila}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </FormItem>
@@ -888,14 +1020,53 @@ export default function CreateOrderPage() {
                     name="customerAddress"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Address</FormLabel>
+                        <FormLabel>Detailed Address</FormLabel>
                         <FormControl>
-                          <Textarea rows={3} placeholder="Full delivery address" {...field} />
+                          <Textarea rows={3} placeholder="House, road, area..." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField
+                      control={form.control}
+                      name="district"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>District</FormLabel>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={DISTRICT_NAMES}
+                              placeholder="Select district"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="upazila"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Upazila</FormLabel>
+                          <FormControl>
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={field.onChange}
+                              options={getUpazilasForDistrict(selectedDistrict)}
+                              placeholder={selectedDistrict ? "Select upazila" : "Select district first"}
+                              disabled={!selectedDistrict}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                   <FormField
                     control={form.control}
                     name="shippingZone"
@@ -943,36 +1114,32 @@ export default function CreateOrderPage() {
                         <FormLabel>Shipping Partner</FormLabel>
                         <FormControl>
                           <div className="space-y-2">
-                            <label
-                              className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
-                                field.value === ShippingPartnerEnum.STEADFAST
-                                  ? "border-indigo-600 bg-indigo-50"
-                                  : "border-input hover:bg-accent"
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                name="shippingPartner"
-                                value={ShippingPartnerEnum.STEADFAST}
-                                checked={field.value === ShippingPartnerEnum.STEADFAST}
-                                onChange={() => field.onChange(ShippingPartnerEnum.STEADFAST)}
-                                className="accent-indigo-600"
-                              />
-                              <span className="text-sm font-medium">Steadfast</span>
-                            </label>
-                            <label
-                              className="flex items-center gap-3 rounded-md border p-3 cursor-not-allowed opacity-60 border-input"
-                            >
-                              <input
-                                type="radio"
-                                name="shippingPartner"
-                                value={ShippingPartnerEnum.PATHAO}
-                                disabled
-                                className="accent-indigo-600"
-                              />
-                              <span className="text-sm font-medium">Pathao</span>
-                              <Badge variant="secondary" className="text-xs ml-auto">Coming Soon</Badge>
-                            </label>
+                            {SHIPPING_PARTNER_OPTIONS.map((option) => (
+                              <label
+                                key={option.value}
+                                className={`flex items-center gap-3 rounded-md border p-3 transition-colors ${
+                                  option.enabled
+                                    ? field.value === option.value
+                                      ? "border-indigo-600 bg-indigo-50 cursor-pointer"
+                                      : "border-input hover:bg-accent cursor-pointer"
+                                    : "cursor-not-allowed opacity-60 border-input"
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  name="shippingPartner"
+                                  value={option.value}
+                                  checked={field.value === option.value}
+                                  onChange={() => field.onChange(option.value)}
+                                  disabled={!option.enabled}
+                                  className="accent-indigo-600"
+                                />
+                                <span className="text-sm font-medium">{option.label}</span>
+                                {option.badge && (
+                                  <Badge variant="secondary" className="text-xs ml-auto">{option.badge}</Badge>
+                                )}
+                              </label>
+                            ))}
                           </div>
                         </FormControl>
                         <FormMessage />

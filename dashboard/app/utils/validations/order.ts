@@ -11,6 +11,8 @@ export const createOrderSchema = z.object({
       "Enter a valid Bangladeshi phone number (e.g., 01XXXXXXXXX)"
     ),
   customerAddress: z.string().min(5, "Address is required"),
+  district: z.string().min(1, "District is required"),
+  upazila: z.string().min(1, "Upazila is required"),
   shippingZone: z.nativeEnum(ShippingZoneEnum, {
     errorMap: () => ({ message: "Select a shipping zone" }),
   }),

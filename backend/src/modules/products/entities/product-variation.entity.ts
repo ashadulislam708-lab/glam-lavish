@@ -51,6 +51,14 @@ export class ProductVariation {
     @Column({ name: 'stock_quantity', type: 'int', default: 0 })
     stockQuantity: number;
 
+    @Column({
+        name: 'wc_stock_quantity',
+        type: 'int',
+        nullable: true,
+        default: null,
+    })
+    wcStockQuantity: number | null;
+
     @Column({ name: 'image_url', type: 'text', nullable: true })
     imageUrl: string | null;
 

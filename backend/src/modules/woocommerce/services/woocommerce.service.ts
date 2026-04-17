@@ -2,7 +2,6 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import axios, { AxiosInstance } from 'axios';
-import * as crypto from 'crypto';
 import { Product } from '../../products/entities/product.entity.js';
 import { ProductVariation } from '../../products/entities/product-variation.entity.js';
 import { Category } from '../../categories/entities/category.entity.js';
@@ -14,6 +13,8 @@ import { SyncLog } from '../../sync/entities/sync-log.entity.js';
 import { SyncLogsQueryDto } from '../dto/sync-logs-query.dto.js';
 import { FetchWcOrdersQueryDto } from '../dto/fetch-wc-orders-query.dto.js';
 import { SyncBulkOrdersDto } from '../dto/sync-bulk-orders.dto.js';
+import { SyncBulkProductsDto } from '../dto/sync-bulk-products.dto.js';
+import { SyncSelectedOrdersDto } from '../dto/sync-selected-orders.dto.js';
 import { ProductTypeEnum } from '../../../shared/enums/product-type.enum.js';
 import { SyncStatusEnum } from '../../../shared/enums/sync-status.enum.js';
 import { SyncDirectionEnum } from '../../../shared/enums/sync-direction.enum.js';
@@ -90,24 +91,6 @@ export class WooCommerceService {
     }
 
     /**
-     * Verify WooCommerce webhook signature
-     */
-    verifyWebhookSignature(payload: string, signature: string): boolean {
-        const config = envConfigService.getWooCommerceConfig();
-        if (!config.WC_WEBHOOK_SECRET) {
-            this.logger.warn('WC_WEBHOOK_SECRET not configured');
-            return false;
-        }
-
-        const computed = crypto
-            .createHmac('sha256', config.WC_WEBHOOK_SECRET)
-            .update(payload, 'utf8')
-            .digest('base64');
-
-        return computed === signature;
-    }
-
-    /**
      * Handle WooCommerce product webhook.
      * Signature verification is handled by WcWebhookGuard before this method is called.
      */
@@ -128,8 +111,9 @@ export class WooCommerceService {
         // Check deduplication (5-second window)
         const existing = await this.productRepository.findOne({
             where: { wcId },
+            withDeleted: true,
         });
-        if (existing?.wcLastSyncedAt) {
+        if (existing?.wcLastSyncedAt && !existing.deletedAt) {
             const timeDiff = Date.now() - existing.wcLastSyncedAt.getTime();
             if (timeDiff < 5000) {
                 await this.logSync(
@@ -147,7 +131,7 @@ export class WooCommerceService {
         try {
             // Handle deleted products
             if (body.status === 'trash' || body.deleted) {
-                if (existing) {
+                if (existing && !existing.deletedAt) {
                     existing.deletedAt = new Date();
                     await this.productRepository.save(existing);
                     await this.logSync(
@@ -162,9 +146,9 @@ export class WooCommerceService {
             }
 
             // Upsert product content (NOT stock)
-            await this.upsertProduct(body);
+            const result = await this.upsertProduct(body);
 
-            return { status: 'success', wcId };
+            return { status: result, wcId };
         } catch (error: any) {
             await this.logSync(
                 SyncDirectionEnum.INBOUND,
@@ -455,6 +439,32 @@ export class WooCommerceService {
     }
 
     /**
+     * Bulk sync selected products from WooCommerce
+     */
+    async syncBulkProducts(dto: SyncBulkProductsDto) {
+        let synced = 0;
+        let errors = 0;
+        const results: {
+            productId: string;
+            status?: string;
+            error?: string;
+        }[] = [];
+
+        for (const productId of dto.productIds) {
+            try {
+                const result = await this.syncSingleProduct(productId);
+                synced++;
+                results.push({ productId, status: result.status });
+            } catch (error: any) {
+                errors++;
+                results.push({ productId, error: error.message });
+            }
+        }
+
+        return { synced, errors, results };
+    }
+
+    /**
      * Manual order sync (last 30 days)
      */
     async syncOrders() {
@@ -465,7 +475,9 @@ export class WooCommerceService {
         let page = 1;
         const perPage = 100;
         let synced = 0;
+        let skipped = 0;
         let errors = 0;
+        const errorDetails: Array<{ wcOrderId: number; error: string }> = [];
 
         try {
             while (true) {
@@ -487,10 +499,16 @@ export class WooCommerceService {
                         });
                         if (!existing) {
                             await this.createOrderFromWc(wcOrder);
+                            synced++;
+                        } else {
+                            skipped++;
                         }
-                        synced++;
                     } catch (error: any) {
                         errors++;
+                        errorDetails.push({
+                            wcOrderId: wcOrder.id,
+                            error: error.message,
+                        });
                         this.logger.error(
                             `Order sync error for WC #${wcOrder.id}: ${error.message}`,
                         );
@@ -504,7 +522,7 @@ export class WooCommerceService {
             this.logger.error(`Order sync failed: ${error.message}`);
         }
 
-        return { synced, errors };
+        return { synced, skipped, errors, errorDetails };
     }
 
     /**
@@ -602,6 +620,102 @@ export class WooCommerceService {
     }
 
     /**
+     * Sync selected orders with WooCommerce (bidirectional).
+     * - Inbound: Pull latest order data/status from WC
+     * - Outbound: Push discount, advance, and invoice notes to WC
+     * Only processes orders with source=WOOCOMMERCE and wcOrderId set.
+     * Manual orders are silently skipped.
+     */
+    async syncSelectedOrders(dto: SyncSelectedOrdersDto) {
+        const orders = await this.orderRepository.find({
+            where: {
+                id: In(dto.orderIds),
+                source: OrderSourceEnum.WOOCOMMERCE,
+            },
+            select: [
+                'id',
+                'invoiceId',
+                'wcOrderId',
+                'status',
+                'discountAmount',
+                'advanceAmount',
+            ],
+        });
+
+        const skipped = dto.orderIds.length - orders.length;
+        let synced = 0;
+        let errors = 0;
+
+        const client = this.getWcClient();
+
+        for (const order of orders) {
+            if (!order.wcOrderId) {
+                continue;
+            }
+
+            try {
+                // --- Inbound: Pull latest from WC ---
+                const response = await client.get(`/orders/${order.wcOrderId}`);
+                const wcOrder = response.data;
+
+                // Update status if changed
+                const newStatus =
+                    WC_STATUS_MAP[wcOrder.status] ||
+                    OrderStatusEnum.PENDING_PAYMENT;
+
+                if (order.status !== newStatus) {
+                    await this.orderRepository.update(order.id, {
+                        status: newStatus,
+                    });
+                }
+
+                // --- Outbound: Push notes to WC ---
+                const discount = Number(order.discountAmount);
+                if (discount > 0) {
+                    await this.addOrderNote(
+                        order.wcOrderId,
+                        `Discount Applied: ${discount} BDT — Glam Lavish Inventory System`,
+                    );
+                }
+
+                const advance = Number(order.advanceAmount);
+                if (advance > 0) {
+                    await this.addOrderNote(
+                        order.wcOrderId,
+                        `Advance Payment: ${advance} BDT — Glam Lavish Inventory System`,
+                    );
+                }
+
+                await this.addOrderNote(
+                    order.wcOrderId,
+                    `Invoice Number: ${order.invoiceId} — Glam Lavish Inventory System`,
+                );
+
+                await this.logSync(
+                    SyncDirectionEnum.INBOUND,
+                    'order',
+                    order.id,
+                    SyncLogStatusEnum.SUCCESS,
+                    {
+                        wcOrderId: order.wcOrderId,
+                        wcStatus: wcOrder.status,
+                        localStatus: newStatus,
+                    },
+                );
+
+                synced++;
+            } catch (error: any) {
+                this.logger.error(
+                    `Failed to sync order ${order.id} (WC #${order.wcOrderId}): ${error.message}`,
+                );
+                errors++;
+            }
+        }
+
+        return { synced, skipped, errors };
+    }
+
+    /**
      * Push product stock to WooCommerce (outbound sync)
      * For simple products: PUT /wc/v3/products/{wcProductId} with { stock_quantity }
      * For variations: PUT /wc/v3/products/{wcProductId}/variations/{wcVariationId} with { stock_quantity }
@@ -657,9 +771,10 @@ export class WooCommerceService {
                     manage_stock: false,
                 });
 
-                // Update wcLastSyncedAt for dedup
+                // Update wcLastSyncedAt for dedup and wcStockQuantity for delta sync
                 await this.variationRepository.update(variationId, {
                     wcLastSyncedAt: new Date(),
+                    wcStockQuantity: variation.stockQuantity,
                 });
 
                 // Also update parent product syncStatus
@@ -701,10 +816,11 @@ export class WooCommerceService {
                     stock_status: this.getStockStatus(product.stockQuantity),
                 });
 
-                // Update syncStatus and wcLastSyncedAt for dedup
+                // Update syncStatus, wcLastSyncedAt for dedup, and wcStockQuantity for delta sync
                 await this.productRepository.update(productId, {
                     syncStatus: SyncStatusEnum.SYNCED,
                     wcLastSyncedAt: new Date(),
+                    wcStockQuantity: product.stockQuantity,
                 });
 
                 await this.logSync(
@@ -819,7 +935,11 @@ export class WooCommerceService {
 
                                 await this.variationRepository.update(
                                     variation.id,
-                                    { wcLastSyncedAt: new Date() },
+                                    {
+                                        wcLastSyncedAt: new Date(),
+                                        wcStockQuantity:
+                                            variation.stockQuantity,
+                                    },
                                 );
                             } catch (varError: any) {
                                 this.logger.error(
@@ -873,10 +993,13 @@ export class WooCommerceService {
                         });
                     }
 
-                    // Update sync timestamps
+                    // Update sync timestamps and wcStockQuantity for delta sync
                     await this.productRepository.update(product.id, {
                         syncStatus: SyncStatusEnum.SYNCED,
                         wcLastSyncedAt: new Date(),
+                        ...(product.type !== ProductTypeEnum.VARIABLE
+                            ? { wcStockQuantity: product.stockQuantity }
+                            : {}),
                     });
 
                     summary.success++;
@@ -917,6 +1040,138 @@ export class WooCommerceService {
 
     private getStockStatus(quantity: number): 'instock' | 'outofstock' {
         return quantity > 0 ? 'instock' : 'outofstock';
+    }
+
+    /**
+     * Apply delta-based stock sync from a WC webhook.
+     * Computes delta = incomingWcStock - storedWcStockQuantity.
+     * If delta != 0, applies it to local stockQuantity.
+     * For NULL wcStockQuantity (first sync after migration), initializes baseline only.
+     */
+    private async applyDeltaStockSync(
+        productId: string,
+        variationId: string | null,
+        incomingWcStock: number,
+    ): Promise<void> {
+        await this.dataSource.transaction(async (manager) => {
+            if (variationId) {
+                const variation = await manager.findOne(ProductVariation, {
+                    where: { id: variationId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                if (!variation) return;
+
+                if (variation.wcStockQuantity === null) {
+                    variation.wcStockQuantity = incomingWcStock;
+                    await manager.save(ProductVariation, variation);
+                    this.logger.log(
+                        `Initialized wcStockQuantity for variation ${variationId} = ${incomingWcStock}`,
+                    );
+                    return;
+                }
+
+                const delta = incomingWcStock - variation.wcStockQuantity;
+                variation.wcStockQuantity = incomingWcStock;
+
+                if (delta === 0) {
+                    await manager.save(ProductVariation, variation);
+                    return;
+                }
+
+                const previousQty = variation.stockQuantity;
+                let newQty = previousQty + delta;
+
+                if (newQty < 0) {
+                    this.logger.warn(
+                        `WC delta sync would make variation ${variationId} stock negative (current: ${previousQty}, delta: ${delta}). Clamping to 0.`,
+                    );
+                    newQty = 0;
+                }
+
+                variation.stockQuantity = newQty;
+                await manager.save(ProductVariation, variation);
+
+                // Recalculate parent product stock from all variations
+                const allVariations = await manager.find(ProductVariation, {
+                    where: { productId },
+                });
+                const totalStock = allVariations.reduce(
+                    (sum, v) => sum + v.stockQuantity,
+                    0,
+                );
+                await manager.update(Product, productId, {
+                    stockQuantity: totalStock,
+                });
+
+                await manager.save(
+                    manager.create(StockAdjustmentLog, {
+                        productId,
+                        variationId,
+                        adjustedById: null,
+                        previousQty,
+                        newQty,
+                        reason: 'WC Stock Sync',
+                        note: `WC delta: ${delta > 0 ? '+' : ''}${delta} (WC stock: ${incomingWcStock})`,
+                    }),
+                );
+
+                this.logger.log(
+                    `Applied WC stock delta to variation ${variationId}: ${previousQty} -> ${newQty} (delta: ${delta})`,
+                );
+            } else {
+                const product = await manager.findOne(Product, {
+                    where: { id: productId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                if (!product) return;
+
+                if (product.wcStockQuantity === null) {
+                    product.wcStockQuantity = incomingWcStock;
+                    await manager.save(Product, product);
+                    this.logger.log(
+                        `Initialized wcStockQuantity for product ${productId} = ${incomingWcStock}`,
+                    );
+                    return;
+                }
+
+                const delta = incomingWcStock - product.wcStockQuantity;
+                product.wcStockQuantity = incomingWcStock;
+
+                if (delta === 0) {
+                    await manager.save(Product, product);
+                    return;
+                }
+
+                const previousQty = product.stockQuantity;
+                let newQty = previousQty + delta;
+
+                if (newQty < 0) {
+                    this.logger.warn(
+                        `WC delta sync would make product ${productId} stock negative (current: ${previousQty}, delta: ${delta}). Clamping to 0.`,
+                    );
+                    newQty = 0;
+                }
+
+                product.stockQuantity = newQty;
+                await manager.save(Product, product);
+
+                await manager.save(
+                    manager.create(StockAdjustmentLog, {
+                        productId,
+                        variationId: null,
+                        adjustedById: null,
+                        previousQty,
+                        newQty,
+                        reason: 'WC Stock Sync',
+                        note: `WC delta: ${delta > 0 ? '+' : ''}${delta} (WC stock: ${incomingWcStock})`,
+                    }),
+                );
+
+                this.logger.log(
+                    `Applied WC stock delta to product ${productId}: ${previousQty} -> ${newQty} (delta: ${delta})`,
+                );
+            }
+        });
     }
 
     private async upsertProduct(
@@ -960,7 +1215,17 @@ export class WooCommerceService {
 
         let existing = await this.productRepository.findOne({
             where: { wcId },
+            withDeleted: true,
         });
+
+        // Restore soft-deleted product when WC sends an active product webhook
+        if (existing?.deletedAt) {
+            await this.productRepository.restore(existing.id);
+            existing.deletedAt = null;
+            this.logger.log(
+                `Restored soft-deleted product wcId ${wcId} (id: ${existing.id})`,
+            );
+        }
 
         const productData: Partial<Product> = {
             name: wcProduct.name,
@@ -987,8 +1252,19 @@ export class WooCommerceService {
         let result: 'created' | 'updated';
 
         if (existing) {
-            // Update content only, do NOT overwrite stock
+            // Update content (NOT stock — stock is handled via delta sync below)
             await this.productRepository.update(existing.id, productData);
+
+            // Delta stock sync for SIMPLE products only (variable products get stock from variations)
+            if (!isVariable) {
+                const incomingWcStock = wcProduct.stock_quantity ?? 0;
+                await this.applyDeltaStockSync(
+                    existing.id,
+                    null,
+                    incomingWcStock,
+                );
+            }
+
             existing = (await this.productRepository.findOne({
                 where: { id: existing.id },
             }))!;
@@ -998,6 +1274,7 @@ export class WooCommerceService {
             const newProduct = this.productRepository.create({
                 ...productData,
                 stockQuantity: wcProduct.stock_quantity || 0,
+                wcStockQuantity: wcProduct.stock_quantity || 0,
             });
             existing = await this.productRepository.save(newProduct);
             result = 'created';
@@ -1080,15 +1357,24 @@ export class WooCommerceService {
                     };
 
                     if (existingVar) {
-                        // Update content, NOT stock
+                        // Update content (NOT stock — stock is handled via delta sync below)
                         await this.variationRepository.update(
                             existingVar.id,
                             varData,
+                        );
+
+                        // Delta stock sync for this variation
+                        const incomingVarWcStock = wcVar.stock_quantity ?? 0;
+                        await this.applyDeltaStockSync(
+                            existing.id,
+                            existingVar.id,
+                            incomingVarWcStock,
                         );
                     } else {
                         const newVar = this.variationRepository.create({
                             ...varData,
                             stockQuantity: wcVar.stock_quantity || 0,
+                            wcStockQuantity: wcVar.stock_quantity || 0,
                         });
                         await this.variationRepository.save(newVar);
                     }
@@ -1189,7 +1475,6 @@ export class WooCommerceService {
                                 ProductVariation,
                                 {
                                     where: { wcId: lineItem.variation_id },
-                                    relations: ['product'],
                                     lock: { mode: 'pessimistic_write' },
                                 },
                             );
@@ -1367,7 +1652,13 @@ export class WooCommerceService {
                             invoice: order.invoiceId,
                             recipient_name: order.customerName,
                             recipient_phone: order.customerPhone,
-                            recipient_address: order.customerAddress,
+                            recipient_address: [
+                                order.customerAddress,
+                                order.upazila,
+                                order.district,
+                            ]
+                                .filter(Boolean)
+                                .join(', '),
                             cod_amount: Number(order.grandTotal),
                         });
 

@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, SelectQueryBuilder } from 'typeorm';
 import { Order } from '../entities/order.entity.js';
 import { OrderItem } from '../entities/order-item.entity.js';
+import { OrderNote } from '../entities/order-note.entity.js';
 import { Product } from '../../products/entities/product.entity.js';
 import { ProductVariation } from '../../products/entities/product-variation.entity.js';
 import { StockAdjustmentLog } from '../../products/entities/stock-adjustment-log.entity.js';
@@ -48,6 +49,8 @@ export class OrderService {
         private readonly variationRepository: Repository<ProductVariation>,
         @InjectRepository(StockAdjustmentLog)
         private readonly stockLogRepository: Repository<StockAdjustmentLog>,
+        @InjectRepository(OrderNote)
+        private readonly orderNoteRepository: Repository<OrderNote>,
         private readonly dataSource: DataSource,
         private readonly steadfastService: SteadfastService,
         private readonly invoiceService: InvoiceService,
@@ -67,7 +70,24 @@ export class OrderService {
             .leftJoinAndSelect('order.items', 'items')
             .leftJoinAndSelect('order.createdBy', 'createdBy');
 
-        if (dto.status) {
+        // Trash mode: show only soft-deleted orders
+        if (dto.trashed) {
+            qb.withDeleted();
+            qb.andWhere('order.deletedAt IS NOT NULL');
+        }
+
+        // Multi-status filter takes priority over single status
+        if (dto.statuses) {
+            const statusList = dto.statuses
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean);
+            if (statusList.length > 0) {
+                qb.andWhere('order.status IN (:...statusList)', {
+                    statusList,
+                });
+            }
+        } else if (dto.status) {
             qb.andWhere('order.status = :status', { status: dto.status });
         }
 
@@ -92,6 +112,16 @@ export class OrderService {
                 '(order.invoiceId ILIKE :search OR order.customerName ILIKE :search OR order.customerPhone ILIKE :search)',
                 { search: `%${dto.search}%` },
             );
+        }
+
+        if (dto.ids) {
+            const idList = dto.ids
+                .split(',')
+                .map((id) => id.trim())
+                .filter(Boolean);
+            if (idList.length > 0) {
+                qb.andWhere('order.id IN (:...idList)', { idList });
+            }
         }
 
         qb.orderBy('order.createdAt', 'DESC');
@@ -151,6 +181,17 @@ export class OrderService {
         );
 
         return [headers.join(','), ...rows].join('\n');
+    }
+
+    /**
+     * Soft-delete (trash) an order
+     */
+    async trashOrder(id: string): Promise<void> {
+        const order = await this.orderRepository.findOne({ where: { id } });
+        if (!order) {
+            throw new NotFoundException(`Order with ID ${id} not found`);
+        }
+        await this.orderRepository.softRemove(order);
     }
 
     /**
@@ -257,6 +298,13 @@ export class OrderService {
                         unitPrice = Number(
                             variation.salePrice || variation.regularPrice || 0,
                         );
+                        // Use caller-provided price if given (order-level override, does not touch product)
+                        if (
+                            item.unitPrice !== undefined &&
+                            item.unitPrice >= 0
+                        ) {
+                            unitPrice = item.unitPrice;
+                        }
                         productName = parentProduct?.name || 'Unknown Product';
                         const attrs = variation.attributes || {};
                         variationLabel =
@@ -305,6 +353,13 @@ export class OrderService {
                         unitPrice = Number(
                             product.salePrice || product.regularPrice || 0,
                         );
+                        // Use caller-provided price if given (order-level override, does not touch product)
+                        if (
+                            item.unitPrice !== undefined &&
+                            item.unitPrice >= 0
+                        ) {
+                            unitPrice = item.unitPrice;
+                        }
                         productName = product.name;
                     }
 
@@ -342,6 +397,8 @@ export class OrderService {
                     customerName: dto.customerName,
                     customerPhone: dto.customerPhone,
                     customerAddress: dto.customerAddress,
+                    district: dto.district ?? null,
+                    upazila: dto.upazila ?? null,
                     shippingZone: dto.shippingZone,
                     shippingPartner: dto.shippingPartner,
                     shippingFee,
@@ -365,13 +422,12 @@ export class OrderService {
                     savedItems.push(savedItem);
                 }
 
-                // 7. Courier push is manual — staff triggers via "Push to Courier" button
                 return {
                     order: { ...savedOrder, items: savedItems },
                     stockDecrementedProducts,
                 };
             })
-            .then(async ({ order, stockDecrementedProducts: decremented }) => {
+            .then(({ order, stockDecrementedProducts: decremented }) => {
                 // Push updated stock to WooCommerce (non-blocking)
                 for (const item of decremented) {
                     this.wooCommerceService
@@ -564,6 +620,8 @@ export class OrderService {
                     customerName: dto.customerName,
                     customerPhone: dto.customerPhone,
                     customerAddress: dto.customerAddress,
+                    district: dto.district ?? null,
+                    upazila: dto.upazila ?? null,
                     shippingZone: dto.shippingZone,
                     shippingPartner: dto.shippingPartner,
                     shippingFee,
@@ -609,7 +667,13 @@ export class OrderService {
                                 invoice: order.invoiceId,
                                 recipient_name: order.customerName,
                                 recipient_phone: order.customerPhone,
-                                recipient_address: order.customerAddress,
+                                recipient_address: [
+                                    order.customerAddress,
+                                    order.upazila,
+                                    order.district,
+                                ]
+                                    .filter(Boolean)
+                                    .join(', '),
                                 cod_amount:
                                     Number(order.grandTotal) -
                                     Number(order.advanceAmount),
@@ -670,12 +734,15 @@ export class OrderService {
     async updateOrderDetails(id: string, dto: UpdateOrderDto) {
         const order = await this.getOrderById(id);
 
-        if (
-            order.status !== OrderStatusEnum.PENDING_PAYMENT &&
-            order.status !== OrderStatusEnum.ON_HOLD
-        ) {
+        const terminalStatuses = [
+            OrderStatusEnum.COMPLETED,
+            OrderStatusEnum.CANCELLED,
+            OrderStatusEnum.REFUNDED,
+            OrderStatusEnum.FAILED,
+        ];
+        if (terminalStatuses.includes(order.status)) {
             throw new BadRequestException(
-                `Order can only be edited in Pending payment or On hold status. Current status: ${order.status}`,
+                `Order cannot be edited in ${order.status} status`,
             );
         }
 
@@ -689,6 +756,15 @@ export class OrderService {
         }
         if (dto.customerAddress !== undefined) {
             updateData.customerAddress = dto.customerAddress;
+        }
+        if (dto.district !== undefined) {
+            updateData.district = dto.district;
+        }
+        if (dto.upazila !== undefined) {
+            updateData.upazila = dto.upazila;
+        }
+        if (dto.shippingPartner !== undefined) {
+            updateData.shippingPartner = dto.shippingPartner;
         }
 
         if (dto.discountAmount !== undefined) {
@@ -739,7 +815,7 @@ export class OrderService {
                     dto.discountAmount > 0
                         ? `Discount amount updated to ${dto.discountAmount} BDT from Glam Lavish Inventory System`
                         : `Discount amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(
+                void this.wooCommerceService.pushOrderNoteToWc(
                     order.wcOrderId,
                     note,
                 );
@@ -753,7 +829,7 @@ export class OrderService {
                     dto.advanceAmount > 0
                         ? `Advance amount updated to ${dto.advanceAmount} BDT from Glam Lavish Inventory System`
                         : `Advance amount removed from Glam Lavish Inventory System`;
-                this.wooCommerceService.pushOrderNoteToWc(
+                void this.wooCommerceService.pushOrderNoteToWc(
                     order.wcOrderId,
                     note,
                 );
@@ -896,7 +972,7 @@ export class OrderService {
 
         if (order.shippingPartner !== ShippingPartnerEnum.STEADFAST) {
             throw new BadRequestException(
-                `Courier retry is only supported for Steadfast orders. This order uses: ${order.shippingPartner}`,
+                `Courier retry is only supported for Steadfast orders. ${order.shippingPartner} is not yet integrated.`,
             );
         }
 
@@ -906,30 +982,209 @@ export class OrderService {
             );
         }
 
-        const courierResult = await this.steadfastService.createOrder({
-            invoice: order.invoiceId,
-            recipient_name: order.customerName,
-            recipient_phone: order.customerPhone,
-            recipient_address: order.customerAddress,
-            cod_amount: Number(order.grandTotal),
-        });
+        try {
+            const courierResult = await this.steadfastService.createOrder({
+                invoice: order.invoiceId,
+                recipient_name: order.customerName,
+                recipient_phone: order.customerPhone,
+                recipient_address: [
+                    order.customerAddress,
+                    order.upazila,
+                    order.district,
+                ]
+                    .filter(Boolean)
+                    .join(', '),
+                cod_amount:
+                    Number(order.grandTotal) - Number(order.advanceAmount),
+            });
 
-        if (!courierResult) {
+            await this.orderRepository.update(id, {
+                courierConsignmentId: courierResult.consignmentId,
+                courierTrackingCode: courierResult.trackingCode,
+            });
+
+            return {
+                id: order.id,
+                invoiceId: order.invoiceId,
+                courierConsignmentId: courierResult.consignmentId,
+                courierTrackingCode: courierResult.trackingCode,
+            };
+        } catch (err: any) {
             throw new BadRequestException(
-                'Steadfast courier push failed. Please try again.',
+                `Steadfast courier push failed: ${err.message}`,
+            );
+        }
+    }
+
+    /**
+     * Manually add or edit courier info (consignment ID, tracking code, tracking URL)
+     * Blocked for terminal statuses: COMPLETED, CANCELLED, REFUNDED
+     */
+    async updateCourierInfo(
+        id: string,
+        dto: {
+            courierConsignmentId?: string;
+            courierTrackingCode?: string;
+            courierTrackingUrl?: string;
+        },
+    ) {
+        const order = await this.orderRepository.findOne({ where: { id } });
+
+        if (!order) {
+            throw new NotFoundException(`Order with ID ${id} not found`);
+        }
+
+        const terminalStatuses = [
+            OrderStatusEnum.COMPLETED,
+            OrderStatusEnum.CANCELLED,
+            OrderStatusEnum.REFUNDED,
+        ];
+
+        if (terminalStatuses.includes(order.status)) {
+            throw new BadRequestException(
+                `Cannot edit courier info for an order with status: ${order.status}`,
             );
         }
 
-        await this.orderRepository.update(id, {
-            courierConsignmentId: courierResult.consignmentId,
-            courierTrackingCode: courierResult.trackingCode,
+        const updates: Partial<Order> = {};
+
+        if (dto.courierConsignmentId !== undefined) {
+            updates.courierConsignmentId = dto.courierConsignmentId || null;
+        }
+        if (dto.courierTrackingCode !== undefined) {
+            updates.courierTrackingCode = dto.courierTrackingCode || null;
+        }
+        if (dto.courierTrackingUrl !== undefined) {
+            updates.courierTrackingUrl = dto.courierTrackingUrl || null;
+        }
+
+        await this.orderRepository.update(id, updates);
+
+        return this.orderRepository.findOne({
+            where: { id },
+            relations: [
+                'items',
+                'items.product',
+                'items.variation',
+                'createdBy',
+            ],
+        });
+    }
+
+    /**
+     * Bulk push selected orders to Steadfast courier
+     */
+    async bulkPushCourier(dto: { orderIds: string[] }) {
+        const orders = await this.orderRepository.find({
+            where: dto.orderIds.map((id) => ({ id })),
         });
 
+        type ResultItem = {
+            invoiceId: string;
+            status: string;
+            consignmentId?: string;
+            error?: string;
+        };
+
+        const eligible: typeof orders = [];
+        const skippedResults: ResultItem[] = [];
+
+        // Categorize each order as eligible or skipped with reason
+        for (const o of orders) {
+            if (o.courierConsignmentId) {
+                skippedResults.push({
+                    invoiceId: o.invoiceId,
+                    status: 'skipped',
+                    error: 'Already pushed to courier',
+                });
+            } else if (o.shippingPartner !== ShippingPartnerEnum.STEADFAST) {
+                skippedResults.push({
+                    invoiceId: o.invoiceId,
+                    status: 'skipped',
+                    error: 'Not a Steadfast order',
+                });
+            } else {
+                eligible.push(o);
+            }
+        }
+
+        // Handle orderIds not found in DB
+        const foundIds = new Set(orders.map((o) => o.id));
+        for (const id of dto.orderIds) {
+            if (!foundIds.has(id)) {
+                skippedResults.push({
+                    invoiceId: id,
+                    status: 'skipped',
+                    error: 'Order not found',
+                });
+            }
+        }
+
+        const skipped = skippedResults.length;
+
+        if (eligible.length === 0) {
+            return {
+                pushed: 0,
+                skipped,
+                errors: 0,
+                results: skippedResults,
+            };
+        }
+
+        const requests = eligible.map((order) => ({
+            invoice: order.invoiceId,
+            recipient_name: order.customerName,
+            recipient_phone: order.customerPhone,
+            recipient_address: [
+                order.customerAddress,
+                order.upazila,
+                order.district,
+            ]
+                .filter(Boolean)
+                .join(', '),
+            cod_amount: Number(order.grandTotal) - Number(order.advanceAmount),
+        }));
+
+        const bulkResult =
+            await this.steadfastService.createBulkOrder(requests);
+
+        // Build invoice-to-order map for matching results
+        const orderByInvoice = new Map(eligible.map((o) => [o.invoiceId, o]));
+
+        let pushed = 0;
+        let errors = 0;
+        const pushResults: ResultItem[] = [];
+
+        for (const item of bulkResult) {
+            const order = orderByInvoice.get(item.invoice);
+            if (!order) continue;
+
+            if (item.status === 'success' && item.consignment_id) {
+                await this.orderRepository.update(order.id, {
+                    courierConsignmentId: String(item.consignment_id),
+                    courierTrackingCode: item.tracking_code ?? undefined,
+                });
+                pushed++;
+                pushResults.push({
+                    invoiceId: item.invoice,
+                    status: 'success',
+                    consignmentId: String(item.consignment_id),
+                });
+            } else {
+                errors++;
+                pushResults.push({
+                    invoiceId: item.invoice,
+                    status: 'error',
+                    error: item.error || 'Steadfast rejected this order',
+                });
+            }
+        }
+
         return {
-            id: order.id,
-            invoiceId: order.invoiceId,
-            courierConsignmentId: courierResult.consignmentId,
-            courierTrackingCode: courierResult.trackingCode,
+            pushed,
+            skipped,
+            errors,
+            results: [...pushResults, ...skippedResults],
         };
     }
 
@@ -1152,6 +1407,8 @@ export class OrderService {
         total: number;
         names: string[];
         addresses: string[];
+        districts: string[];
+        upazilas: string[];
     }> {
         const normalized = normalizeBDPhone(phone);
         const phoneWhereClause = `REPLACE(REPLACE(order.customer_phone, '+880', ''), '880', '') = :normalized`;
@@ -1176,9 +1433,13 @@ export class OrderService {
                 .createQueryBuilder('order')
                 .select('order.customer_name', 'name')
                 .addSelect('order.customer_address', 'address')
+                .addSelect('order.district', 'district')
+                .addSelect('order.upazila', 'upazila')
                 .where(phoneWhereClause, { normalized })
                 .groupBy('order.customer_name')
                 .addGroupBy('order.customer_address')
+                .addGroupBy('order.district')
+                .addGroupBy('order.upazila')
                 .getRawMany(),
         ]);
 
@@ -1188,6 +1449,20 @@ export class OrderService {
         const addresses = [
             ...new Set(identities.map((r: { address: string }) => r.address)),
         ];
+        const districts = [
+            ...new Set(
+                identities
+                    .map((r: { district: string | null }) => r.district)
+                    .filter(Boolean),
+            ),
+        ] as string[];
+        const upazilas = [
+            ...new Set(
+                identities
+                    .map((r: { upazila: string | null }) => r.upazila)
+                    .filter(Boolean),
+            ),
+        ] as string[];
 
         return {
             completed: parseInt(result?.completed, 10) || 0,
@@ -1196,6 +1471,180 @@ export class OrderService {
             total: parseInt(result?.total, 10) || 0,
             names,
             addresses,
+            districts,
+            upazilas,
         };
+    }
+
+    /**
+     * Handle Steadfast webhook notifications (delivery_status & tracking_update)
+     * Accepts raw body object — no class-validator DTO to avoid rejecting webhooks
+     */
+    async handleSteadfastWebhook(body: Record<string, any>): Promise<void> {
+        const consignmentId = String(body.consignment_id ?? '');
+        const invoice = String(body.invoice ?? '');
+        const notificationType = String(body.notification_type ?? '');
+
+        if (!consignmentId && !invoice) {
+            this.logger.warn(
+                'Steadfast webhook: no consignment_id or invoice provided',
+            );
+            return;
+        }
+
+        // Look up order by consignment_id first, then by invoice
+        let order: Order | null = null;
+
+        if (consignmentId) {
+            order = await this.orderRepository.findOne({
+                where: { courierConsignmentId: consignmentId },
+                relations: ['items'],
+            });
+        }
+
+        if (!order && invoice) {
+            order = await this.orderRepository.findOne({
+                where: { invoiceId: invoice },
+                relations: ['items'],
+            });
+        }
+
+        if (!order) {
+            this.logger.warn(
+                `Steadfast webhook: no order found for consignment_id=${consignmentId}, invoice=${invoice}`,
+            );
+            return;
+        }
+
+        if (notificationType === 'delivery_status') {
+            await this.handleSteadfastDeliveryStatus(order, body);
+        } else if (notificationType === 'tracking_update') {
+            await this.handleSteadfastTrackingUpdate(order, body);
+        } else {
+            this.logger.warn(
+                `Steadfast webhook: unknown notification_type=${notificationType} for order ${order.invoiceId}`,
+            );
+        }
+    }
+
+    /**
+     * Handle Steadfast delivery_status webhook
+     * Maps Steadfast delivery status to internal OrderStatusEnum and applies side effects
+     */
+    private async handleSteadfastDeliveryStatus(
+        order: Order,
+        body: Record<string, any>,
+    ): Promise<void> {
+        const steadfastStatus = String(body.status ?? '').toLowerCase();
+
+        const statusMap: Record<string, OrderStatusEnum | null> = {
+            pending: null,
+            delivered: OrderStatusEnum.COMPLETED,
+            partial_delivered: OrderStatusEnum.COMPLETED,
+            cancelled: OrderStatusEnum.CANCELLED,
+            unknown: null,
+        };
+
+        const newStatus = statusMap[steadfastStatus] ?? null;
+
+        if (newStatus === null) {
+            this.logger.log(
+                `Steadfast webhook: status "${steadfastStatus}" for order ${order.invoiceId} — no status change`,
+            );
+            return;
+        }
+
+        // Skip if already in target status
+        if (order.status === newStatus) {
+            this.logger.log(
+                `Steadfast webhook: order ${order.invoiceId} already in ${newStatus} — skipping`,
+            );
+            return;
+        }
+
+        this.logger.log(
+            `Steadfast webhook: updating order ${order.invoiceId} from ${order.status} to ${newStatus}`,
+        );
+
+        // Handle stock restoration for CANCELLED status
+        const stockRestoreStatuses = [
+            OrderStatusEnum.CANCELLED,
+            OrderStatusEnum.REFUNDED,
+            OrderStatusEnum.FAILED,
+        ];
+
+        if (stockRestoreStatuses.includes(newStatus)) {
+            try {
+                await this.dataSource.transaction(async (manager) => {
+                    await restoreOrderItemsStock(
+                        manager,
+                        order.items,
+                        null,
+                        'Steadfast ' +
+                            (steadfastStatus === 'cancelled'
+                                ? 'Cancelled'
+                                : newStatus),
+                        order.invoiceId,
+                    );
+                });
+
+                // Push restored stock to WooCommerce (non-blocking)
+                for (const item of order.items) {
+                    if (item.productId) {
+                        this.wooCommerceService
+                            .pushStockToWc(
+                                item.productId,
+                                item.variationId || null,
+                            )
+                            .catch((err) => {
+                                this.logger.error(
+                                    `Failed to push stock to WC after Steadfast ${steadfastStatus} for product ${item.productId}: ${err.message}`,
+                                );
+                            });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.error(
+                    `Steadfast webhook: stock restoration failed for order ${order.invoiceId}: ${err.message}`,
+                );
+            }
+        }
+
+        // Update order status and history (skip courier cancel — Steadfast already handled it)
+        const updatedHistory = [...(order.statusHistory || []), newStatus];
+        await this.orderRepository.update(order.id, {
+            status: newStatus,
+            statusHistory: updatedHistory,
+        });
+
+        this.logger.log(
+            `Steadfast webhook: order ${order.invoiceId} status updated to ${newStatus}`,
+        );
+    }
+
+    /**
+     * Handle Steadfast tracking_update webhook
+     * Saves tracking message as an order note
+     */
+    private async handleSteadfastTrackingUpdate(
+        order: Order,
+        body: Record<string, any>,
+    ): Promise<void> {
+        const trackingMessage = body.tracking_message;
+        if (!trackingMessage) {
+            return;
+        }
+
+        this.logger.log(
+            `Steadfast webhook: tracking update for order ${order.invoiceId}: ${trackingMessage}`,
+        );
+
+        const note = this.orderNoteRepository.create({
+            orderId: order.id,
+            content: `[Steadfast Tracking] ${trackingMessage}`,
+            createdById: null,
+        });
+
+        await this.orderNoteRepository.save(note);
     }
 }

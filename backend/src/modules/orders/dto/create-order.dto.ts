@@ -33,6 +33,16 @@ export class OrderItemDto {
     @IsInt()
     @Min(1)
     quantity: number;
+
+    @ApiPropertyOptional({
+        description:
+            'Custom unit price override (BDT). Uses product price if omitted.',
+        minimum: 0,
+    })
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    unitPrice?: number;
 }
 
 export class CreateOrderDto {
@@ -50,6 +60,18 @@ export class CreateOrderDto {
     @IsString()
     @IsNotEmpty()
     customerAddress: string;
+
+    @ApiPropertyOptional({ description: 'Bangladesh district name' })
+    @IsOptional()
+    @IsString()
+    district?: string;
+
+    @ApiPropertyOptional({
+        description: 'Upazila/Thana name within the district',
+    })
+    @IsOptional()
+    @IsString()
+    upazila?: string;
 
     @ApiProperty({
         description: 'Shipping zone',

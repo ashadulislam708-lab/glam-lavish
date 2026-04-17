@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Patch,
+    Delete,
     Param,
     Body,
     Query,
@@ -24,6 +25,8 @@ import { UpdateOrderStatusDto } from '../dto/update-order-status.dto.js';
 import { ListOrdersDto } from '../dto/list-orders.dto.js';
 import { CreateOrderNoteDto } from '../dto/create-order-note.dto.js';
 import { CustomerHistoryQueryDto } from '../dto/customer-history-query.dto.js';
+import { BulkPushCourierDto } from '../dto/bulk-push-courier.dto.js';
+import { UpdateCourierInfoDto } from '../dto/update-courier-info.dto.js';
 import { CurrentUser } from '../../../core/decorators/current-user.decorator.js';
 import { Roles } from '../../../core/decorators/roles.decorator.js';
 import { RolesGuard } from '../../../core/guards/roles.guard.js';
@@ -60,7 +63,7 @@ export class OrderController {
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader(
             'Content-Disposition',
-            `attachment; filename=orders-${new Date().toISOString().split('T')[0]}.csv`,
+            `attachment; filename=orders-${crypto.randomUUID()}.csv`,
         );
         res.send(csv);
     }
@@ -128,6 +131,16 @@ export class OrderController {
     }
 
     /**
+     * Bulk push selected orders to Steadfast courier
+     * POST /api/orders/bulk-push-courier
+     */
+    @Post('bulk-push-courier')
+    @HttpCode(HttpStatus.OK)
+    async bulkPushCourier(@Body() dto: BulkPushCourierDto) {
+        return this.orderService.bulkPushCourier(dto);
+    }
+
+    /**
      * Get order detail with line items
      * GET /api/orders/:id
      */
@@ -135,6 +148,16 @@ export class OrderController {
     @HttpCode(HttpStatus.OK)
     async findOne(@Param('id', ParseUUIDPipe) id: string) {
         return this.orderService.getOrderById(id);
+    }
+
+    /**
+     * Soft-delete (trash) an order
+     * DELETE /api/orders/:id
+     */
+    @Delete(':id')
+    @HttpCode(HttpStatus.NO_CONTENT)
+    async trashOrder(@Param('id', ParseUUIDPipe) id: string) {
+        await this.orderService.trashOrder(id);
     }
 
     /**
@@ -186,6 +209,19 @@ export class OrderController {
     @HttpCode(HttpStatus.OK)
     async getQrCode(@Param('id', ParseUUIDPipe) id: string) {
         return this.orderService.getQrCode(id);
+    }
+
+    /**
+     * Manually add or edit courier info (consignment ID, tracking code, tracking URL)
+     * PATCH /api/orders/:id/courier
+     */
+    @Patch(':id/courier')
+    @HttpCode(HttpStatus.OK)
+    async updateCourierInfo(
+        @Param('id', ParseUUIDPipe) id: string,
+        @Body() dto: UpdateCourierInfoDto,
+    ) {
+        return this.orderService.updateCourierInfo(id, dto);
     }
 
     /**

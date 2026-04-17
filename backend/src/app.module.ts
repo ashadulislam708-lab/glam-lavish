@@ -29,6 +29,7 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { InvoiceModule } from './modules/invoice/invoice.module';
+import { CustomerModule } from './modules/customers/customers.module';
 
 // Infrastructure
 import { CourierModule } from './infrastructure/courier/courier.module';
@@ -58,6 +59,7 @@ import { CourierModule } from './infrastructure/courier/courier.module';
         CategoryModule,
         ProductModule,
         OrderModule,
+        CustomerModule,
         DashboardModule,
         WooCommerceModule,
         TrackingModule,

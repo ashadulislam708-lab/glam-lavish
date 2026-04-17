@@ -22,7 +22,7 @@ export const settingsService = {
   syncOrders: () =>
     httpService.post<ImportResult>("/woocommerce/sync/orders", undefined, { timeout: 300000 }),
 
-  getSyncLogs: (params?: { page?: number; limit?: number }) =>
+  getSyncLogs: (params?: { page?: number; limit?: number; direction?: string; status?: string }) =>
     httpService.get<PaginatedResponse<SyncLog>>("/woocommerce/sync-logs", {
       params,
     }),

@@ -19,6 +19,8 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district: string | null;
+  upazila: string | null;
   shippingZone: ShippingZoneEnum;
   shippingPartner: ShippingPartnerEnum;
   shippingFee: number;
@@ -28,6 +30,7 @@ export interface Order {
   advanceAmount: number;
   courierConsignmentId: string | null;
   courierTrackingCode: string | null;
+  courierTrackingUrl: string | null;
   qrCodeDataUrl: string | null;
   wcOrderId: string | null;
   createdBy: { id: string; name: string; email: string } | null;
@@ -40,12 +43,15 @@ export interface CreateOrderItemRequest {
   productId: string;
   variationId: string | null;
   quantity: number;
+  unitPrice?: number;
 }
 
 export interface CreateOrderRequest {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district?: string;
+  upazila?: string;
   shippingZone: ShippingZoneEnum;
   shippingPartner: ShippingPartnerEnum;
   discountAmount?: number;
@@ -57,14 +63,23 @@ export interface UpdateOrderStatusRequest {
   status: OrderStatusEnum;
 }
 
+export interface UpdateCourierInfoRequest {
+  courierConsignmentId?: string;
+  courierTrackingCode?: string;
+  courierTrackingUrl?: string;
+}
+
 export interface FetchOrdersParams {
   page?: number;
   limit?: number;
   status?: string;
+  statuses?: string;
+  trashed?: boolean;
   source?: string;
   startDate?: string;
   endDate?: string;
   search?: string;
+  ids?: string;
 }
 
 export interface InvoiceData {
@@ -76,6 +91,8 @@ export interface InvoiceData {
   customerName: string;
   customerPhone: string;
   customerAddress: string;
+  district: string | null;
+  upazila: string | null;
   items: {
     name: string;
     variation: string | null;
@@ -98,12 +115,14 @@ export interface CustomerOrderHistory {
   total: number;
   names: string[];
   addresses: string[];
+  districts: string[];
+  upazilas: string[];
 }
 
 export interface OrderNote {
   id: string;
   content: string;
-  createdBy: string;
+  createdBy: { id: string; name: string; email: string } | null;
   createdAt: string;
 }
 

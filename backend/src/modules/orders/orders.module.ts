@@ -9,6 +9,7 @@ import { StockAdjustmentLog } from '../products/entities/stock-adjustment-log.en
 import { InvoiceModule } from '../invoice/invoice.module.js';
 import { WooCommerceModule } from '../woocommerce/woocommerce.module.js';
 import { OrderController } from './controllers/order.controller.js';
+import { SteadfastWebhookController } from './controllers/steadfast-webhook.controller.js';
 import { OrderService } from './services/order.service.js';
 import { OrderNoteService } from './services/order-note.service.js';
 
@@ -25,7 +26,7 @@ import { OrderNoteService } from './services/order-note.service.js';
         InvoiceModule,
         WooCommerceModule,
     ],
-    controllers: [OrderController],
+    controllers: [OrderController, SteadfastWebhookController],
     providers: [OrderService, OrderNoteService],
     exports: [OrderService, OrderNoteService],
 })

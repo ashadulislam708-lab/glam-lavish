@@ -7,6 +7,7 @@ import type {
   InvoiceData,
   Order,
   OrderNote,
+  UpdateCourierInfoRequest,
   UpdateOrderStatusRequest,
 } from "~/types/order";
 import type { PaginatedResponse } from "~/types/common";
@@ -21,7 +22,7 @@ export const orderService = {
   createOrder: (data: CreateOrderRequest) =>
     httpService.post<Order>("/orders", data),
 
-  updateOrder: (id: string, data: CreateOrderRequest) =>
+  updateOrder: (id: string, data: Partial<CreateOrderRequest>) =>
     httpService.patch<Order>(`/orders/${id}`, data),
 
   updateOrderStatus: (id: string, data: UpdateOrderStatusRequest) =>
@@ -36,6 +37,9 @@ export const orderService = {
   retryCourier: (id: string) =>
     httpService.post<Order>(`/orders/${id}/retry-courier`),
 
+  updateCourierInfo: (id: string, data: UpdateCourierInfoRequest) =>
+    httpService.patch<Order>(`/orders/${id}/courier`, data),
+
   exportOrders: (params?: FetchOrdersParams) =>
     httpService.getBlob("/orders/export", { params }),
 
@@ -49,6 +53,34 @@ export const orderService = {
     httpService.get<CustomerOrderHistory>("/orders/customer-history", {
       params: { phone },
     }),
+
+  syncWcOrders: () =>
+    httpService.post<{ imported: number; updated: number; errors: number }>(
+      "/woocommerce/sync/orders",
+      undefined,
+      { timeout: 300000 },
+    ),
+
+  syncSelectedOrders: (orderIds: string[]) =>
+    httpService.post<{ synced: number; skipped: number; errors: number }>(
+      "/woocommerce/orders/sync-selected",
+      { orderIds },
+      { timeout: 300000 },
+    ),
+
+  getBulkInvoiceData: (ids: string[]) =>
+    Promise.allSettled(ids.map((id) => orderService.getInvoiceData(id))),
+
+  trashOrder: (id: string) =>
+    httpService.delete(`/orders/${id}`),
+
+  bulkPushCourier: (orderIds: string[]) =>
+    httpService.post<{
+      pushed: number;
+      skipped: number;
+      errors: number;
+      results: Array<{ invoiceId: string; status: string; consignmentId?: string; error?: string }>;
+    }>("/orders/bulk-push-courier", { orderIds }, { timeout: 120000 }),
 };
 
 export const fetchOrders = createAsyncThunk(

@@ -4,6 +4,7 @@ import {
     PrimaryGeneratedColumn,
     CreateDateColumn,
     UpdateDateColumn,
+    DeleteDateColumn,
     ManyToOne,
     OneToMany,
     JoinColumn,
@@ -57,6 +58,12 @@ export class Order {
 
     @Column({ name: 'customer_address', type: 'text' })
     customerAddress: string;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    district: string | null;
+
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    upazila: string | null;
 
     @Column({
         name: 'shipping_zone',
@@ -122,6 +129,14 @@ export class Order {
     })
     courierTrackingCode: string | null;
 
+    @Column({
+        name: 'courier_tracking_url',
+        type: 'varchar',
+        length: 500,
+        nullable: true,
+    })
+    courierTrackingUrl: string | null;
+
     @Column({ name: 'qr_code_data_url', type: 'text', nullable: true })
     qrCodeDataUrl: string | null;
 
@@ -156,4 +171,7 @@ export class Order {
 
     @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
     updatedAt: Date;
+
+    @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+    deletedAt: Date | null;
 }

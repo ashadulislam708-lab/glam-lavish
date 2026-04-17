@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAppDispatch, useAppSelector } from "~/redux/store/hooks";
 import { fetchOrders } from "~/services/httpServices/orderService";
 import { orderService } from "~/services/httpServices/orderService";
@@ -30,13 +30,25 @@ import { formatBDT, formatDateTime } from "~/utils/formatting";
 import { getOrderStatusColor, getOrderSourceColor } from "~/utils/badges";
 import { OrderStatusEnum, OrderSourceEnum } from "~/enums";
 import { ORDER_STATUS_LABELS } from "~/constants/orderStatusLabels";
-import { Plus, FileDown, Search, Loader2, Check, AlertCircle } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { Plus, FileDown, Search, Loader2, Check, AlertCircle, RefreshCw, X, Printer, Truck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { FormHandleState } from "~/types/common";
+import { ORDER_STATUS_GROUPS, type OrderStatusGroup } from "~/constants/orderStatusGroups";
 
 export default function OrderListPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const group = searchParams.get("group") as OrderStatusGroup | null;
+  const groupConfig = group && group in ORDER_STATUS_GROUPS ? ORDER_STATUS_GROUPS[group] : null;
   const { orders, loading, meta } = useAppSelector((state) => state.orders);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -50,23 +62,59 @@ export default function OrderListPage() {
     loadingButtonType: "",
   });
 
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const hasActiveFilters = search || status || source || startDate || endDate;
+
+  const clearAllFilters = () => {
+    setSearch("");
+    setStatus("");
+    setSource("");
+    setStartDate("");
+    setEndDate("");
+    setPage(1);
+  };
+
   const loadOrders = useCallback(() => {
+    let statusesFilter: string | undefined;
+    let trashedFilter: boolean | undefined;
+
+    if (group === "trash") {
+      trashedFilter = true;
+    } else if (groupConfig && groupConfig.statuses.length > 0) {
+      statusesFilter = groupConfig.statuses.join(",");
+    }
+
     dispatch(
       fetchOrders({
         page,
         limit: 25,
-        status: status || undefined,
+        status: !statusesFilter && !trashedFilter ? status || undefined : undefined,
+        statuses: statusesFilter,
+        trashed: trashedFilter,
         source: source || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         search: search || undefined,
       })
     );
-  }, [dispatch, page, status, source, startDate, endDate, search]);
+  }, [dispatch, page, status, source, startDate, endDate, search, group, groupConfig]);
 
   useEffect(() => {
     loadOrders();
   }, [loadOrders]);
+
+  // Clear selection when filters/page/group change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, status, source, startDate, endDate, search, group]);
+
+  // Reset status filter when group changes
+  useEffect(() => {
+    setStatus("");
+    setPage(1);
+  }, [group]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -78,6 +126,28 @@ export default function OrderListPage() {
     },
     []
   );
+
+  const toggleSelect = (orderId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (orders.length > 0 && orders.every((o) => selectedIds.has(o.id))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(orders.map((o) => o.id)));
+    }
+  };
+
+  const allSelected = orders.length > 0 && orders.every((o) => selectedIds.has(o.id));
 
   const handleExportCSV = useCallback(() => {
     setFormHandle({ isLoading: true, loadingButtonType: "export" });
@@ -92,7 +162,7 @@ export default function OrderListPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `orders-${new Date().toISOString().split("T")[0]}.csv`;
+        a.download = `orders-${crypto.randomUUID()}.csv`;
         a.click();
         URL.revokeObjectURL(url);
         toast.success("CSV exported successfully");
@@ -105,22 +175,159 @@ export default function OrderListPage() {
       });
   }, [status, source, startDate, endDate]);
 
+  const handleSyncWcOrders = useCallback(async () => {
+    setFormHandle({ isLoading: true, loadingButtonType: "syncWc" });
+    try {
+      const result = await orderService.syncWcOrders();
+      toast.success(
+        `WC Sync complete — Imported: ${result.imported ?? 0}, Updated: ${result.updated ?? 0}, Errors: ${result.errors ?? 0}`
+      );
+      loadOrders();
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "WC order sync failed"
+      );
+    } finally {
+      setFormHandle({ isLoading: false, loadingButtonType: "" });
+    }
+  }, [loadOrders]);
+
+  const handleSyncSelected = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      toast.warning("No orders selected");
+      return;
+    }
+    setFormHandle({ isLoading: true, loadingButtonType: "syncSelected" });
+    try {
+      const result = await orderService.syncSelectedOrders(Array.from(selectedIds));
+      toast.success(
+        `Sync complete — Synced: ${result.synced}, Skipped: ${result.skipped}, Errors: ${result.errors}`
+      );
+      setSelectedIds(new Set());
+      loadOrders();
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "Order sync failed"
+      );
+    } finally {
+      setFormHandle({ isLoading: false, loadingButtonType: "" });
+    }
+  }, [selectedIds, loadOrders]);
+
+  const handleExportSelected = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      toast.warning("No orders selected");
+      return;
+    }
+    setFormHandle({ isLoading: true, loadingButtonType: "exportSelected" });
+    try {
+      const blob = await orderService.exportOrders({
+        ids: Array.from(selectedIds).join(","),
+        status: status || undefined,
+        source: source || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `orders-${crypto.randomUUID()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${selectedIds.size} orders`);
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "Export failed"
+      );
+    } finally {
+      setFormHandle({ isLoading: false, loadingButtonType: "" });
+    }
+  }, [selectedIds, status, source, startDate, endDate]);
+
+  const handleBulkPrintInvoice = useCallback(() => {
+    if (selectedIds.size === 0) {
+      toast.warning("No orders selected");
+      return;
+    }
+    navigate(`/orders/invoices?ids=${Array.from(selectedIds).join(",")}`);
+  }, [selectedIds, navigate]);
+
+  const handleBulkPushCourier = useCallback(async () => {
+    if (selectedIds.size === 0) {
+      toast.warning("No orders selected");
+      return;
+    }
+    setFormHandle({ isLoading: true, loadingButtonType: "pushCourier" });
+    try {
+      const result = await orderService.bulkPushCourier(Array.from(selectedIds));
+      if (result.pushed > 0) {
+        toast.success(`${result.pushed} order(s) pushed to courier successfully`);
+      }
+      if (result.skipped > 0) {
+        const skippedItems = result.results
+          .filter((r) => r.status === "skipped")
+          .map((r) => `${r.invoiceId}: ${r.error}`)
+          .join(", ");
+        toast.warning(`${result.skipped} skipped — ${skippedItems}`);
+      }
+      if (result.errors > 0) {
+        const errorItems = result.results
+          .filter((r) => r.status === "error")
+          .map((r) => `${r.invoiceId}: ${r.error}`)
+          .join(", ");
+        toast.error(`${result.errors} failed — ${errorItems}`);
+      }
+      if (result.pushed === 0 && result.errors === 0 && result.skipped === 0) {
+        toast.info("No orders to process");
+      }
+      setSelectedIds(new Set());
+      loadOrders();
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "Bulk courier push failed"
+      );
+    } finally {
+      setFormHandle({ isLoading: false, loadingButtonType: "" });
+    }
+  }, [selectedIds, loadOrders]);
+
+  const isBusy = formHandle.isLoading;
+
+  // Trash confirmation state
+  const [trashTarget, setTrashTarget] = useState<{ id: string; invoiceId: string } | null>(null);
+
+  const handleTrashOrder = useCallback(async () => {
+    if (!trashTarget) return;
+    try {
+      await orderService.trashOrder(trashTarget.id);
+      toast.success(`Order ${trashTarget.invoiceId} moved to trash`);
+      setTrashTarget(null);
+      loadOrders();
+    } catch (err: unknown) {
+      toast.error(
+        (err as { message?: string })?.message || "Failed to trash order"
+      );
+    }
+  }, [trashTarget, loadOrders]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Orders</h1>
+        <h1 className="text-xl font-bold">
+          Orders{groupConfig ? ` - ${groupConfig.label}` : ""}
+        </h1>
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={handleExportCSV}
-            disabled={formHandle.isLoading && formHandle.loadingButtonType === "export"}
+            onClick={handleSyncWcOrders}
+            disabled={isBusy && formHandle.loadingButtonType === "syncWc"}
           >
-            {formHandle.isLoading && formHandle.loadingButtonType === "export" ? (
+            {isBusy && formHandle.loadingButtonType === "syncWc" ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
-              <FileDown className="mr-2 h-4 w-4" />
+              <RefreshCw className="mr-2 h-4 w-4" />
             )}
-            Export CSV
+            Sync WC Orders
           </Button>
           <Button onClick={() => navigate("/orders/new")}>
             <Plus className="mr-2 h-4 w-4" />
@@ -128,6 +335,72 @@ export default function OrderListPage() {
           </Button>
         </div>
       </div>
+
+      {/* Bulk action bar */}
+        <div className={cn("flex items-center justify-between rounded-lg border px-4 py-3", selectedIds.size > 0 ? "bg-blue-50" : "bg-muted/30 opacity-60")}>
+          <span className={cn("text-sm font-medium", selectedIds.size > 0 ? "text-blue-900" : "text-muted-foreground")}>
+            {selectedIds.size} order{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkPrintInvoice}
+              disabled={selectedIds.size === 0}
+            >
+              <Printer className="mr-1 h-3 w-3" />
+              Print Invoice
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSyncSelected}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "syncSelected")}
+            >
+              {isBusy && formHandle.loadingButtonType === "syncSelected" ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1 h-3 w-3" />
+              )}
+              Sync Orders
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkPushCourier}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "pushCourier")}
+            >
+              {isBusy && formHandle.loadingButtonType === "pushCourier" ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Truck className="mr-1 h-3 w-3" />
+              )}
+              Push to Courier
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportSelected}
+              disabled={selectedIds.size === 0 || (isBusy && formHandle.loadingButtonType === "exportSelected")}
+            >
+              {isBusy && formHandle.loadingButtonType === "exportSelected" ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <FileDown className="mr-1 h-3 w-3" />
+              )}
+              Export Selected
+            </Button>
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
 
       <Card>
         <CardHeader>
@@ -141,25 +414,30 @@ export default function OrderListPage() {
                 className="pl-9"
               />
             </div>
-            <Select
-              value={status}
-              onValueChange={(val) => {
-                setStatus(val === "all" ? "" : val);
-                setPage(1);
-              }}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {Object.values(OrderStatusEnum).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {ORDER_STATUS_LABELS[s] ?? s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {group !== "trash" && (
+              <Select
+                value={status}
+                onValueChange={(val) => {
+                  setStatus(val === "all" ? "" : val);
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {(groupConfig && groupConfig.statuses.length > 0
+                    ? groupConfig.statuses
+                    : Object.values(OrderStatusEnum)
+                  ).map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {ORDER_STATUS_LABELS[s as OrderStatusEnum] ?? s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select
               value={source}
               onValueChange={(val) => {
@@ -247,6 +525,18 @@ export default function OrderListPage() {
               className="w-[160px]"
               placeholder="End Date"
             />
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                className="text-xs h-8 text-muted-foreground hover:text-destructive"
+                onClick={clearAllFilters}
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear Filters
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -263,6 +553,14 @@ export default function OrderListPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                      </TableHead>
                       <TableHead>Invoice</TableHead>
                       <TableHead>Customer</TableHead>
                       <TableHead>Phone</TableHead>
@@ -272,6 +570,7 @@ export default function OrderListPage() {
                       <TableHead>Source</TableHead>
                       <TableHead>Courier</TableHead>
                       <TableHead>Date</TableHead>
+                      {group !== "trash" && <TableHead className="w-16">Action</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -281,9 +580,18 @@ export default function OrderListPage() {
                         onClick={() => navigate(`/orders/${order.id}`)}
                         className={cn(
                           "cursor-pointer hover:bg-gray-50",
-                          !order.courierConsignmentId && "border-l-2 border-l-red-400"
+                          !order.courierConsignmentId && "border-l-2 border-l-red-400",
+                          selectedIds.has(order.id) && "bg-blue-50/50"
                         )}
                       >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(order.id)}
+                            onChange={() => toggleSelect(order.id)}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                        </TableCell>
                         <TableCell>
                           <Link
                             to={`/orders/${order.id}`}
@@ -327,6 +635,23 @@ export default function OrderListPage() {
                         <TableCell className="text-muted-foreground whitespace-nowrap">
                           {formatDateTime(order.createdAt)}
                         </TableCell>
+                        {group !== "trash" && (
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                              onClick={() =>
+                                setTrashTarget({
+                                  id: order.id,
+                                  invoiceId: order.invoiceId,
+                                })
+                              }
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -343,6 +668,34 @@ export default function OrderListPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Trash confirmation dialog */}
+      <Dialog
+        open={!!trashTarget}
+        onOpenChange={(open) => !open && setTrashTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move to Trash</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to move order{" "}
+              <span className="font-semibold text-foreground">
+                {trashTarget?.invoiceId}
+              </span>{" "}
+              to trash? You can find it later in the Trash section.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTrashTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleTrashOrder}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Move to Trash
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
