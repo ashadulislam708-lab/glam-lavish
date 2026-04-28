@@ -4,7 +4,10 @@ export class AddStatusHistoryToOrders1774300000000
     implements MigrationInterface
 {
     public async up(queryRunner: QueryRunner): Promise<void> {
-        const hasColumn = await queryRunner.hasColumn('orders', 'status_history');
+        const hasColumn = await queryRunner.hasColumn(
+            'orders',
+            'status_history',
+        );
         if (!hasColumn) {
             await queryRunner.query(
                 `ALTER TABLE "orders" ADD COLUMN "status_history" jsonb NOT NULL DEFAULT '[]'`,
