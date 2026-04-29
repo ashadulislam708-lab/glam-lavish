@@ -268,17 +268,28 @@ export class OrderService {
                         variation.stockQuantity -= item.quantity;
                         await manager.save(ProductVariation, variation);
 
-                        // Load and update parent product stock separately
+                        // Load parent product and recalculate total from all variations
                         const parentProduct = await manager.findOne(Product, {
                             where: { id: variation.productId },
                             lock: { mode: 'pessimistic_write' },
                         });
                         if (parentProduct) {
-                            parentProduct.stockQuantity -= item.quantity;
+                            const allVariations = await manager.find(
+                                ProductVariation,
+                                {
+                                    where: {
+                                        productId: variation.productId,
+                                    },
+                                },
+                            );
+                            parentProduct.stockQuantity = allVariations.reduce(
+                                (sum, v) => sum + v.stockQuantity,
+                                0,
+                            );
                             await manager.save(Product, parentProduct);
                         }
 
-                        // Log stock adjustment
+                        // Log stock adjustment (createOrder)
                         await manager.save(
                             manager.create(StockAdjustmentLog, {
                                 productId: variation.productId,
@@ -427,17 +438,15 @@ export class OrderService {
                     stockDecrementedProducts,
                 };
             })
-            .then(({ order, stockDecrementedProducts: decremented }) => {
-                // Push updated stock to WooCommerce (non-blocking)
-                for (const item of decremented) {
-                    this.wooCommerceService
-                        .pushStockToWc(item.productId, item.variationId)
-                        .catch((err) => {
-                            this.logger.error(
-                                `Failed to push stock to WC after order ${order.invoiceId} for product ${item.productId}: ${err.message}`,
-                            );
-                        });
-                }
+            .then(async ({ order, stockDecrementedProducts: decremented }) => {
+                await Promise.allSettled(
+                    decremented.map((item) =>
+                        this.wooCommerceService.pushStockToWc(
+                            item.productId,
+                            item.variationId,
+                        ),
+                    ),
+                );
 
                 return order;
             });
@@ -529,7 +538,18 @@ export class OrderService {
                             lock: { mode: 'pessimistic_write' },
                         });
                         if (parentProduct) {
-                            parentProduct.stockQuantity -= item.quantity;
+                            const allVariations = await manager.find(
+                                ProductVariation,
+                                {
+                                    where: {
+                                        productId: variation.productId,
+                                    },
+                                },
+                            );
+                            parentProduct.stockQuantity = allVariations.reduce(
+                                (sum, v) => sum + v.stockQuantity,
+                                0,
+                            );
                             await manager.save(Product, parentProduct);
                         }
 
@@ -704,21 +724,22 @@ export class OrderService {
                     );
                 }
 
-                // Push updated stock to WooCommerce (non-blocking)
+                // Push updated stock to WooCommerce synchronously
                 // Deduplicate by productId+variationId
                 const seen = new Set<string>();
+                const pushPromises: Promise<void>[] = [];
                 for (const item of affected) {
                     const key = `${item.productId}:${item.variationId}`;
                     if (seen.has(key)) continue;
                     seen.add(key);
-                    this.wooCommerceService
-                        .pushStockToWc(item.productId, item.variationId)
-                        .catch((err) => {
-                            this.logger.error(
-                                `Failed to push stock to WC after edit ${order.invoiceId} for product ${item.productId}: ${err.message}`,
-                            );
-                        });
+                    pushPromises.push(
+                        this.wooCommerceService.pushStockToWc(
+                            item.productId,
+                            item.variationId,
+                        ),
+                    );
                 }
+                await Promise.allSettled(pushPromises);
 
                 return order;
             });
@@ -898,18 +919,19 @@ export class OrderService {
             });
             result.stockRestored = true;
 
-            // Push restored stock to WooCommerce (non-blocking)
+            // Push restored stock to WooCommerce synchronously
+            const pushPromises: Promise<void>[] = [];
             for (const item of order.items) {
                 if (item.productId) {
-                    this.wooCommerceService
-                        .pushStockToWc(item.productId, item.variationId || null)
-                        .catch((err) => {
-                            this.logger.error(
-                                `Failed to push stock to WC after ${dto.status} for product ${item.productId}: ${err.message}`,
-                            );
-                        });
+                    pushPromises.push(
+                        this.wooCommerceService.pushStockToWc(
+                            item.productId,
+                            item.variationId || null,
+                        ),
+                    );
                 }
             }
+            await Promise.allSettled(pushPromises);
 
             // Cancel courier for CANCELLED and FAILED only
             if (
@@ -1588,21 +1610,19 @@ export class OrderService {
                     );
                 });
 
-                // Push restored stock to WooCommerce (non-blocking)
+                // Push restored stock to WooCommerce synchronously
+                const pushPromises: Promise<void>[] = [];
                 for (const item of order.items) {
                     if (item.productId) {
-                        this.wooCommerceService
-                            .pushStockToWc(
+                        pushPromises.push(
+                            this.wooCommerceService.pushStockToWc(
                                 item.productId,
                                 item.variationId || null,
-                            )
-                            .catch((err) => {
-                                this.logger.error(
-                                    `Failed to push stock to WC after Steadfast ${steadfastStatus} for product ${item.productId}: ${err.message}`,
-                                );
-                            });
+                            ),
+                        );
                     }
                 }
+                await Promise.allSettled(pushPromises);
             } catch (err: any) {
                 this.logger.error(
                     `Steadfast webhook: stock restoration failed for order ${order.invoiceId}: ${err.message}`,

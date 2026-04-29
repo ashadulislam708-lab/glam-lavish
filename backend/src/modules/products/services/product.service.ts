@@ -196,15 +196,8 @@ export class ProductService {
                     wcSyncStatus: product.syncStatus,
                 };
             })
-            .then((result) => {
-                // Push stock to WooCommerce (non-blocking, after transaction commits)
-                this.wooCommerceService
-                    .pushStockToWc(result.id, null)
-                    .catch((err) => {
-                        this.logger.error(
-                            `Failed to push stock to WC after adjustment for product ${result.id}: ${err.message}`,
-                        );
-                    });
+            .then(async (result) => {
+                await this.wooCommerceService.pushStockToWc(result.id, null);
                 return result;
             });
     }
@@ -281,15 +274,11 @@ export class ProductService {
                     wcSyncStatus: 'SYNCED',
                 };
             })
-            .then((result) => {
-                // Push variation stock to WooCommerce (non-blocking, after transaction commits)
-                this.wooCommerceService
-                    .pushStockToWc(result.productId, result.id)
-                    .catch((err) => {
-                        this.logger.error(
-                            `Failed to push variation stock to WC after adjustment for variation ${result.id}: ${err.message}`,
-                        );
-                    });
+            .then(async (result) => {
+                await this.wooCommerceService.pushStockToWc(
+                    result.productId,
+                    result.id,
+                );
                 return result;
             });
     }

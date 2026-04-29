@@ -37,13 +37,19 @@ export async function restoreOrderItemsStock(
                 variation.stockQuantity += item.quantity;
                 await manager.save(ProductVariation, variation);
 
-                // Also restore parent product stock
+                // Recalculate parent product stock from all variations for consistency
                 const product = await manager.findOne(Product, {
                     where: { id: item.productId! },
                     lock: { mode: 'pessimistic_write' },
                 });
                 if (product) {
-                    product.stockQuantity += item.quantity;
+                    const allVariations = await manager.find(ProductVariation, {
+                        where: { productId: item.productId! },
+                    });
+                    product.stockQuantity = allVariations.reduce(
+                        (sum, v) => sum + v.stockQuantity,
+                        0,
+                    );
                     await manager.save(Product, product);
                 }
 

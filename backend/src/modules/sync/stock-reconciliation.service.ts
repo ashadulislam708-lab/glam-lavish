@@ -8,10 +8,15 @@ import { SyncDirectionEnum } from '../../shared/enums/sync-direction.enum.js';
 import { SyncLogStatusEnum } from '../../shared/enums/sync-log-status.enum.js';
 
 /**
- * Hourly stock reconciliation cron job.
- * PRD requirement: Every hour, iterate all products with a wcId,
- * push the local stock quantity to WooCommerce (local stock wins),
- * and log the reconciliation in sync_logs.
+ * Hourly stock reconciliation cron job — DISABLED.
+ * Stock syncs now happen immediately (synchronously) after every stock mutation.
+ * WC pushes are no longer fire-and-forget; they are awaited inline.
+ *
+ * This service is retained for potential manual reconciliation triggers.
+ * To re-enable periodic sync, uncomment the @Cron decorator below.
+ *
+ * PRD requirement reference: "Hourly cron, local stock wins"
+ * Current implementation: immediate pushStockToWc() after every mutation.
  */
 @Injectable()
 export class StockReconciliationService {
