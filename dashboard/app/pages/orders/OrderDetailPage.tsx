@@ -349,6 +349,13 @@ export default function OrderDetailPage() {
             <Printer className="mr-2 h-4 w-4" />
             Print Invoice
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/orders/${id}/packing-invoice`)}
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            Packing Invoice
+          </Button>
           <Button variant="outline" onClick={handleShowQr}>
             <QrCode className="mr-2 h-4 w-4" />
             QR Code

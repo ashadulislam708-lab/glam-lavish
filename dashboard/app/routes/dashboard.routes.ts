@@ -10,6 +10,7 @@ export const dashboardRoutes = [
   route("orders/:id", "pages/orders/OrderDetailPage.tsx"),
   route("orders/:id/edit", "pages/orders/EditOrderPage.tsx"),
   route("orders/:id/invoice", "pages/orders/InvoicePrintPage.tsx"),
+  route("orders/:id/packing-invoice", "pages/orders/PackingInvoicePage.tsx"),
   route("customers", "pages/customers/CustomerListPage.tsx"),
   route("settings/sync-logs", "pages/settings/SyncLogsPage.tsx"),
   route("settings", "pages/settings/SettingsPage.tsx"),
